@@ -9,7 +9,11 @@ frontend (Next.js)  ->  backend API (FastAPI)  ->  services  ->  StorageDriverBa
                               Redis + ARQ worker (polling, long jobs)
 ```
 
-* **Services** (to be written) know only `StorageDriverBase` and the database models.
+* **API** (`backend/app/api`): FastAPI routers, API key check, error mapping. `Ctx` (`services/context.py`) bundles the
+  database session, the actor and a driver factory for each request.
+* **Services** (`backend/app/services`) know only `StorageDriverBase` and the database models:
+  `provisioning.py` (array first, then database, with compensation), `quota.py` (tenant limits),
+  `audit.py` (`audited()` stores a success or failure row for every operation).
 * **Drivers** (`backend/app/drivers`) are adapters: they translate the neutral calls into one product's
   REST dialect and translate answers into neutral objects (`backend/app/schemas/storage.py`).
 * `create_driver(model, connection)` picks the adapter from `StorageDevice.model`.
@@ -42,4 +46,5 @@ Sizes are GB in the neutral API; the Huawei client converts to 512-byte sectors.
   The key is `CMP_ENCRYPTION_KEY` (base64 of 32 random bytes).
 * `AuditLog` rows are kept when a device or tenant is deleted (foreign keys use `SET NULL`).
 * Enums are stored as VARCHAR (no native PostgreSQL enum types).
-* Tenant quotas are stored but not yet enforced by any service.
+* Tenant quotas are enforced by `services/quota.py` when volumes, file systems and buckets are created or grown.
+* The API layer is described in `docs/api.md`.

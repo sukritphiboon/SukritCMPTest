@@ -13,6 +13,8 @@ async def test_block_and_object_not_supported(oceanprotect):
         await oceanprotect.create_bucket("b", "o")
     with pytest.raises(NotSupportedError):
         await oceanprotect.generate_s3_credentials("o")
+    with pytest.raises(NotSupportedError):
+        await oceanprotect.delete_bucket("b")
 
 
 async def test_extreme_reduction_ratio(oceanprotect):

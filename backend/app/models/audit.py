@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Uuid, func
@@ -15,7 +15,10 @@ class AuditLog(UUIDPrimaryKey, Base):
     __tablename__ = "audit_logs"
 
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),  # microsecond precision keeps same-second events ordered
+        server_default=func.now(),
+        index=True,
     )
     actor: Mapped[str] = mapped_column(String(128), index=True)
     action: Mapped[str] = mapped_column(String(64), index=True)  # e.g. "lun.create"

@@ -52,6 +52,9 @@ class OceanProtectDriver(HuaweiDeviceManagerDriver):
     async def create_bucket(self, name: str, owner: str, quota_gb: float | None = None) -> BucketInfo:
         _unsupported("object storage")
 
+    async def delete_bucket(self, name: str) -> None:
+        _unsupported("object storage")
+
     async def set_bucket_quota(self, name: str, quota_gb: float) -> BucketInfo:
         _unsupported("object storage")
 

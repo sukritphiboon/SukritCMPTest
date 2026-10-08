@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mock-server"))
 
 os.environ.setdefault("CMP_ENCRYPTION_KEY", base64.b64encode(b"k" * 32).decode())
+os.environ.setdefault("CMP_API_KEYS", "tester:test-key,auditor:other-key")
 
 from mock_server.main import create_app  # noqa: E402
 

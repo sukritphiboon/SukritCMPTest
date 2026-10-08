@@ -46,6 +46,8 @@ services:
 
   backend:
     build: ./backend
+    environment:
+      CMP_DEVICE_HTTPS: "false"
     env_file:
       - path: .env
         required: false

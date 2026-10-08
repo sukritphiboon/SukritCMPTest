@@ -185,6 +185,16 @@ async def admin_list_buckets(request: Request):
     return E.ok([_bucket_view(request, b) for b in state.objects["bucket"].values()])
 
 
+@router.delete("/_admin/buckets/{bucket}")
+async def admin_delete_bucket(request: Request, bucket: str):
+    state = _require_object(request)
+    found = next((b for b in state.objects["bucket"].values() if b["NAME"] == bucket), None)
+    if not found:
+        raise E.HuaweiError(E.OBJECT_NOT_FOUND, "The bucket does not exist.")
+    state.delete("bucket", found["ID"])
+    return E.ok()
+
+
 @router.put("/_admin/buckets/{bucket}/quota")
 async def admin_set_quota(request: Request, bucket: str, body: dict[str, Any] = Body(...)):
     state = _require_object(request)

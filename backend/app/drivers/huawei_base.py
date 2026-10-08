@@ -92,6 +92,9 @@ class HuaweiDeviceManagerDriver(StorageDriverBase):
         )
         return FileSystemInfo(array_id=data["ID"], name=data["NAME"], size_gb=sectors_to_gb(data["CAPACITY"]))
 
+    async def delete_filesystem(self, filesystem_id: str) -> None:
+        await self.client.request("DELETE", f"/filesystem/{filesystem_id}")
+
     async def create_share(
         self, filesystem_id: str, protocol: Literal["nfs", "cifs"], name: str | None = None
     ) -> ShareInfo:

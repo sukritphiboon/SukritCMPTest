@@ -58,6 +58,9 @@ async def test_file_services(dorado):
     assert quota.hard_gb == 10 and quota.soft_gb == 8
     snap = await dorado.create_snapshot(fs.array_id, "fs-snap", "filesystem")
     assert snap.resource_type == "filesystem"
+    await dorado.delete_filesystem(fs.array_id)
+    with pytest.raises(ResourceNotFoundError):
+        await dorado.delete_filesystem(fs.array_id)
 
 
 async def test_object_services(dorado):
@@ -66,6 +69,9 @@ async def test_object_services(dorado):
     bucket = await dorado.create_bucket("tenant-a-data", "tenant-a", quota_gb=5)
     assert bucket.quota_gb == 5 and bucket.endpoint.endswith("/s3")
     assert (await dorado.set_bucket_quota("tenant-a-data", 50)).quota_gb == 50
+    await dorado.delete_bucket("tenant-a-data")
+    with pytest.raises(ResourceNotFoundError):
+        await dorado.delete_bucket("tenant-a-data")
 
 
 async def test_telemetry(dorado):

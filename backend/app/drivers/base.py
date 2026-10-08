@@ -77,6 +77,9 @@ class StorageDriverBase(ABC):
     ) -> FileSystemInfo: ...
 
     @abstractmethod
+    async def delete_filesystem(self, filesystem_id: str) -> None: ...
+
+    @abstractmethod
     async def create_share(
         self, filesystem_id: str, protocol: Literal["nfs", "cifs"], name: str | None = None
     ) -> ShareInfo: ...
@@ -89,6 +92,9 @@ class StorageDriverBase(ABC):
     # ---- object ----------------------------------------------------------------
     @abstractmethod
     async def create_bucket(self, name: str, owner: str, quota_gb: float | None = None) -> BucketInfo: ...
+
+    @abstractmethod
+    async def delete_bucket(self, name: str) -> None: ...
 
     @abstractmethod
     async def set_bucket_quota(self, name: str, quota_gb: float) -> BucketInfo: ...

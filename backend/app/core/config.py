@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     # base64 encoded 32 random bytes (AES-256 key) used to protect device credentials
     encryption_key: str = ""
     telemetry_interval_seconds: int = 60
+    # "user:key,user2:key2" - the user name is recorded as the actor in the audit log
+    api_keys: str = ""
+    # how the CMP reaches the arrays (mock servers speak plain http)
+    device_https: bool = True
+    device_verify_tls: bool = False
 
 
 @lru_cache

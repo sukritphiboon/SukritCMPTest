@@ -99,6 +99,9 @@ class DoradoV7Driver(HuaweiDeviceManagerDriver):
         data = await self.client.request("POST", "/s3/_admin/buckets", json=body, raw_path=True)
         return _bucket(data)
 
+    async def delete_bucket(self, name: str) -> None:
+        await self.client.request("DELETE", f"/s3/_admin/buckets/{name}", raw_path=True)
+
     async def set_bucket_quota(self, name: str, quota_gb: float) -> BucketInfo:
         data = await self.client.request(
             "PUT",

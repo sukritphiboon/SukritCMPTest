@@ -1,0 +1,37 @@
+from typing import Annotated
+
+from fastapi import Depends, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_session
+from app.core.security import get_actor
+from app.services.context import Ctx, DriverFactory, default_driver_factory
+
+
+def get_driver_factory() -> DriverFactory:
+    """Overridden in tests to point drivers at an in-process mock server."""
+    return default_driver_factory
+
+
+async def get_ctx(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    actor: Annotated[str, Depends(get_actor)],
+    factory: Annotated[DriverFactory, Depends(get_driver_factory)],
+) -> Ctx:
+    return Ctx(session, actor, factory, request.client.host if request.client else None)
+
+
+CtxDep = Annotated[Ctx, Depends(get_ctx)]
+
+
+class Page:
+    def __init__(
+        self,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ):
+        self.limit, self.offset = limit, offset
+
+
+PageDep = Annotated[Page, Depends(Page)]
