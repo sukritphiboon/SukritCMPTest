@@ -1,9 +1,11 @@
 import enum
 
 
-class DeviceModel(enum.StrEnum):
-    DORADO_V7 = "dorado_v7"
-    OCEANPROTECT = "oceanprotect"
+class ApplianceModel(enum.StrEnum):
+    X3000 = "x3000"
+    X6000 = "x6000"
+    X8000 = "x8000"
+    X9000 = "x9000"
 
 
 class HealthStatus(enum.StrEnum):
@@ -13,32 +15,49 @@ class HealthStatus(enum.StrEnum):
     FAULT = "fault"
 
 
-class Provisioning(enum.StrEnum):
-    THIN = "thin"
-    THICK = "thick"
-
-
-class MappingStatus(enum.StrEnum):
-    UNMAPPED = "unmapped"
-    MAPPED = "mapped"
-
-
-class FileProtocol(enum.StrEnum):
-    NFS = "nfs"
-    CIFS = "cifs"
-
-
-class QuotaStatus(enum.StrEnum):
-    NONE = "none"
-    WITHIN_LIMIT = "within_limit"
-    SOFT_EXCEEDED = "soft_exceeded"
-    HARD_EXCEEDED = "hard_exceeded"
+class BackupType(enum.StrEnum):
+    FULL = "full"
+    INCREMENTAL = "incremental"
 
 
 class WormMode(enum.StrEnum):
     NONE = "none"
     ENTERPRISE = "enterprise"
     COMPLIANCE = "compliance"
+
+
+class AssetType(enum.StrEnum):
+    VMWARE = "vmware"
+    DATABASE = "database"
+    FILE_SHARE = "file_share"
+    LUN = "lun"
+
+
+class JobStatus(enum.StrEnum):
+    """PENDING -> RUNNING -> SUCCESS | FAILED | PARTIALLY_SUCCESSFUL | CANCELLED"""
+
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    PARTIALLY_SUCCESSFUL = "PARTIALLY_SUCCESSFUL"
+    CANCELLED = "CANCELLED"
+
+    @property
+    def is_final(self) -> bool:
+        return self not in (JobStatus.PENDING, JobStatus.RUNNING)
+
+
+class AlarmSeverity(enum.StrEnum):
+    CRITICAL = "critical"
+    MAJOR = "major"
+    WARNING = "warning"
+
+
+class HardwareHealth(enum.StrEnum):
+    OK = "ok"
+    DEGRADED = "degraded"
+    FAULT = "fault"
 
 
 class AuditOutcome(enum.StrEnum):

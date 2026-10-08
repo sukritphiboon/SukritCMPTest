@@ -39,6 +39,14 @@ async def session_info(request: Request):
     return E.ok({"username": state.username, "deviceid": state.device_id})
 
 
+@router.put("/sessions")
+async def heartbeat(request: Request):
+    """Keep-alive: extends the session lifetime."""
+    state = require_session(request)
+    state.heartbeat(request.headers["iBaseToken"])
+    return E.ok()
+
+
 @router.delete("/sessions")
 async def logout(request: Request):
     state = require_session(request)

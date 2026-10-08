@@ -10,7 +10,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     # base64 encoded 32 random bytes (AES-256 key) used to protect device credentials
     encryption_key: str = ""
-    telemetry_interval_seconds: int = 60
+    # how often the worker polls every appliance (seconds); ARQ needs a divisor of 60
+    telemetry_interval_seconds: int = 30
+    telemetry_concurrency: int = 4
+    # data older than this many intervals is reported as stale
+    telemetry_stale_intervals: int = 3
+    runway_window_days: int = 7
     # "user:key,user2:key2" - the user name is recorded as the actor in the audit log
     api_keys: str = ""
     # how the CMP reaches the arrays (mock servers speak plain http)

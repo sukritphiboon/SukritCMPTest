@@ -1,6 +1,8 @@
-"""Huawei storage mock server entry point.
+"""Huawei OceanProtect mock server entry point.
 
-Run: ``MOCK_PROFILE=dorado uvicorn mock_server.main:app --port 8088``
+Run: ``uvicorn mock_server.main:app --port 8088``
+Environment: MOCK_SEED, MOCK_USERNAME, MOCK_PASSWORD, MOCK_MODEL, MOCK_RAW_TB,
+MOCK_USED_PERCENT, MOCK_DAILY_GROWTH_GB.
 """
 
 from __future__ import annotations
@@ -13,25 +15,37 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import envelope as E
-from .routers import block, file, protect, s3, session, system
+from .routers import backup, file, protect, session, system
 from .state import MockState
 
 
 def create_app(
-    profile: str | None = None,
     seed: int | None = None,
     username: str | None = None,
     password: str | None = None,
+    **state_options: Any,
 ) -> FastAPI:
-    profile = profile or os.getenv("MOCK_PROFILE", "dorado")
     if seed is None and os.getenv("MOCK_SEED"):
         seed = int(os.environ["MOCK_SEED"])
-    app = FastAPI(title=f"Huawei Storage Mock ({profile})", version="0.1.0")
+
+    def from_env(name: str, cast):
+        raw = os.getenv(name)
+        return cast(raw) if raw else None
+
+    env_options = {
+        "model": from_env("MOCK_MODEL", str),
+        "raw_tb": from_env("MOCK_RAW_TB", int),
+        "initial_used_percent": from_env("MOCK_USED_PERCENT", float),
+        "daily_growth_gb": from_env("MOCK_DAILY_GROWTH_GB", float),
+    }
+    # 0 is a valid value (for example "no growth"), so only None means "not given"
+    options = {k: v for k, v in {**env_options, **state_options}.items() if v is not None}
+    app = FastAPI(title="Huawei OceanProtect Mock", version="0.2.0")
     app.state.mock = MockState(
-        profile,
         seed,
         username or os.getenv("MOCK_USERNAME", "admin"),
         password or os.getenv("MOCK_PASSWORD", "Admin@storage1"),
+        **options,
     )
 
     @app.exception_handler(E.HuaweiError)
@@ -42,10 +56,10 @@ def create_app(
     async def validation_error(_: Request, exc: RequestValidationError):
         return JSONResponse(E.fail(E.PARAM_ERROR, "The entered parameter is incorrect."))
 
-    for r in (session, system, block, file, protect, s3):
+    for r in (session, system, backup, file, protect):
         app.include_router(r.router)
 
-    # ---- simulation control (not part of the Huawei API) ----
+    # ---- simulation controls (not part of the Huawei API; no authentication) ----
     @app.post("/_mock/reset")
     async def reset():
         app.state.mock.reset()
@@ -58,14 +72,34 @@ def create_app(
 
     @app.post("/_mock/alarms")
     async def inject_alarm(body: dict[str, Any]):
-        alarm = app.state.mock.add_alarm(
+        return app.state.mock.add_alarm(
             body.get("level", "Major"), body.get("name", "Injected alarm"), body.get("eventID", "0xF00CF9999")
         )
-        return alarm
+
+    @app.delete("/_mock/alarms/{sequence}")
+    async def clear_alarm(sequence: str):
+        app.state.mock.clear_alarm(sequence)
+        return {"ok": True}
+
+    @app.post("/_mock/ingest")
+    async def ingest(body: dict[str, Any]):
+        app.state.mock.ingest(float(body.get("logical_gb", 0)))
+        return {"ok": True}
+
+    @app.post("/_mock/performance")
+    async def pin_performance(body: dict[str, Any]):
+        """Pin write_mbps / read_mbps / iops / streams_per_controller; ``{}`` unpins."""
+        app.state.mock.perf_override = {k: v for k, v in body.items() if v is not None}
+        return {"ok": True}
+
+    @app.post("/_mock/hardware_fault")
+    async def hardware_fault(body: dict[str, Any]):
+        item = app.state.mock.set_health(body["component"], str(body["id"]), body.get("health", "fault"))
+        return item
 
     @app.get("/healthz")
     async def healthz():
-        return {"status": "ok", "profile": app.state.mock.profile.key}
+        return {"status": "ok", "model": app.state.mock.model}
 
     return app
 

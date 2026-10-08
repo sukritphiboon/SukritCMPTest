@@ -1,37 +1,39 @@
+from .alarm import AlarmRecord
 from .audit import AuditLog
+from .backup import BackupJob, BackupPolicy, ProtectedAsset
 from .base import Base
-from .bucket import ObjectBucket
-from .device import StorageDevice
 from .enums import (
+    AlarmSeverity,
+    ApplianceModel,
+    AssetType,
     AuditOutcome,
-    DeviceModel,
-    FileProtocol,
+    BackupType,
+    HardwareHealth,
     HealthStatus,
-    MappingStatus,
-    Provisioning,
-    QuotaStatus,
+    JobStatus,
     WormMode,
 )
-from .filesystem import FileSystem
-from .policy import ProtectionPolicy
-from .tenant import Tenant
-from .volume import StorageVolume
+from .target import BackupTarget
+from .telemetry import CapacityMetric, HardwareSnapshot, ThroughputSample
 
 __all__ = [
+    "AlarmRecord",
+    "AlarmSeverity",
+    "ApplianceModel",
+    "AssetType",
     "AuditLog",
     "AuditOutcome",
+    "BackupJob",
+    "BackupPolicy",
+    "BackupTarget",
+    "BackupType",
     "Base",
-    "DeviceModel",
-    "FileProtocol",
-    "FileSystem",
+    "CapacityMetric",
+    "HardwareHealth",
+    "HardwareSnapshot",
     "HealthStatus",
-    "MappingStatus",
-    "ObjectBucket",
-    "ProtectionPolicy",
-    "Provisioning",
-    "QuotaStatus",
-    "StorageDevice",
-    "StorageVolume",
-    "Tenant",
+    "JobStatus",
+    "ProtectedAsset",
+    "ThroughputSample",
     "WormMode",
 ]

@@ -19,22 +19,21 @@ async def list_audit_logs(
     action: str | None = None,
     resource_type: str | None = None,
     outcome: AuditOutcome | None = None,
-    storage_device_id: uuid.UUID | None = None,
-    tenant_id: uuid.UUID | None = None,
+    backup_target_id: uuid.UUID | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
 ):
-    filters = []
-    for column, value in (
-        (AuditLog.actor, actor),
-        (AuditLog.action, action),
-        (AuditLog.resource_type, resource_type),
-        (AuditLog.outcome, outcome),
-        (AuditLog.storage_device_id, storage_device_id),
-        (AuditLog.tenant_id, tenant_id),
-    ):
-        if value is not None:
-            filters.append(column == value)
+    filters = [
+        column == value
+        for column, value in (
+            (AuditLog.actor, actor),
+            (AuditLog.action, action),
+            (AuditLog.resource_type, resource_type),
+            (AuditLog.outcome, outcome),
+            (AuditLog.backup_target_id, backup_target_id),
+        )
+        if value is not None
+    ]
     if since:
         filters.append(AuditLog.occurred_at >= since)
     if until:

@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 
 from app.api import errors
-from app.api.routers import audit, buckets, devices, filesystems, policies, tenants, volumes
+from app.api.routers import audit, oceanprotect, targets
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CMP Backend", version="0.2.0")
+    app = FastAPI(title="OceanProtect CMP", version="0.3.0")
     errors.install(app)
-    for module in (devices, tenants, volumes, filesystems, buckets, policies, audit):
+    for module in (targets, oceanprotect, audit):
         app.include_router(module.router, prefix="/api/v1")
 
     @app.get("/health", tags=["health"])

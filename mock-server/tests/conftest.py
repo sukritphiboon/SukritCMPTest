@@ -10,10 +10,14 @@ BASE = "/deviceManager/rest"
 class Client:
     """Thin test wrapper that logs in and prefixes the device path."""
 
-    def __init__(self, http: httpx.AsyncClient):
-        self.http = http
+    def __init__(self, http: httpx.AsyncClient, app):
+        self.http, self.app = http, app
         self.token: str | None = None
         self.device_id = ""
+
+    @property
+    def mock(self):
+        return self.app.state.mock
 
     async def login(self, username=USER, password=PASSWORD):
         r = await self.http.post(
@@ -39,24 +43,16 @@ class Client:
         return body.get("data")
 
 
-async def make_client(profile: str, seed: int = 42):
-    app = create_app(profile=profile, seed=seed)
+async def make_client(seed: int = 42, **options):
+    app = create_app(seed=seed, **options)
     http = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://mock")
-    client = Client(http)
+    client = Client(http, app)
     await client.login()
-    client.app = app
     return client
 
 
 @pytest.fixture
-async def dorado():
-    c = await make_client("dorado")
-    yield c
-    await c.http.aclose()
-
-
-@pytest.fixture
-async def protect():
-    c = await make_client("oceanprotect")
+async def op():
+    c = await make_client()
     yield c
     await c.http.aclose()

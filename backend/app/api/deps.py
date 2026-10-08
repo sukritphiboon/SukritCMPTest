@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Query, Request
@@ -13,6 +14,11 @@ def get_driver_factory() -> DriverFactory:
     return default_driver_factory
 
 
+def get_now() -> datetime:
+    """Overridden in tests to replay a fixed clock."""
+    return datetime.now(UTC)
+
+
 async def get_ctx(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -23,6 +29,7 @@ async def get_ctx(
 
 
 CtxDep = Annotated[Ctx, Depends(get_ctx)]
+NowDep = Annotated[datetime, Depends(get_now)]
 
 
 class Page:

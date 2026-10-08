@@ -23,26 +23,14 @@ services:
       timeout: 3s
       retries: 10
 
-  # Simulated Huawei OceanStor Dorado V7 (port 8088)
-  mock-dorado:
+  # Simulated Huawei OceanProtect appliance (DeviceManager REST API on port 8088)
+  mock-oceanprotect:
     build: ./mock-server
     environment:
-      MOCK_PROFILE: dorado
       MOCK_USERNAME: ${MOCK_USERNAME:-admin}
       MOCK_PASSWORD: ${MOCK_PASSWORD:-Admin@storage1}
     ports:
       - "8088:8088"
-
-  # Simulated Huawei OceanProtect (port 8089)
-  mock-oceanprotect:
-    build: ./mock-server
-    environment:
-      MOCK_PROFILE: oceanprotect
-      MOCK_USERNAME: ${MOCK_USERNAME:-admin}
-      MOCK_PASSWORD: ${MOCK_PASSWORD:-Admin@storage1}
-      MOCK_PORT: "8089"
-    ports:
-      - "8089:8089"
 
   backend:
     build: ./backend
@@ -62,6 +50,8 @@ services:
   worker:
     build: ./backend
     command: ["arq", "app.worker.settings.WorkerSettings"]
+    environment:
+      CMP_DEVICE_HTTPS: "false"
     env_file:
       - path: .env
         required: false

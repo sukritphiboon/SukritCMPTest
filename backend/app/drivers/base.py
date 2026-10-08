@@ -1,37 +1,33 @@
-"""Unified storage driver interface (adapter pattern).
+"""Backup appliance driver interface (adapter pattern).
 
-The CMP services only talk to ``StorageDriverBase``. A concrete driver translates the calls
-into the REST dialect of one product. All sizes are in GB; all methods are async.
+Services talk only to ``BackupDriverBase``; a concrete driver translates the calls into the REST
+dialect of one product. All sizes are GB and all methods are async.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from typing import Literal
 
-from app.schemas.storage import (
-    Alarm,
-    BucketInfo,
-    CapacityMetrics,
-    FileSystemInfo,
-    LunGroupInfo,
-    LunInfo,
-    MappingInfo,
-    PerformanceMetrics,
-    QuotaInfo,
-    ReductionRatio,
-    S3Credentials,
-    ShareInfo,
-    SnapshotInfo,
+from app.schemas.backup import (
+    AlarmInfo,
+    AssetInfo,
+    BackupCopy,
+    HardwareStatus,
+    PerformanceSample,
+    PolicyInfo,
+    PoolMetrics,
+    SystemInfo,
+    TaskInfo,
+    WormPolicyInfo,
 )
 
 
-class StorageDriverBase(ABC):
-    # ---- lifecycle ----------------------------------------------------------
+class BackupDriverBase(ABC):
+    # ---- lifecycle ------------------------------------------------------------
     @abstractmethod
     async def connect(self) -> None:
-        """Log in to the array. Called automatically on first use."""
+        """Log in. Called once before use."""
 
     @abstractmethod
     async def close(self) -> None:
@@ -44,73 +40,72 @@ class StorageDriverBase(ABC):
     async def __aexit__(self, *exc) -> None:
         await self.close()
 
-    # ---- block ---------------------------------------------------------------
+    # ---- telemetry -----------------------------------------------------------------
     @abstractmethod
-    async def create_lun(
-        self, name: str, size_gb: float, thin: bool = True, pool_id: str | None = None
-    ) -> LunInfo: ...
+    async def get_system_info(self) -> SystemInfo: ...
 
     @abstractmethod
-    async def delete_lun(self, lun_id: str) -> None: ...
+    async def get_pool_metrics(self) -> PoolMetrics: ...
 
     @abstractmethod
-    async def expand_lun(self, lun_id: str, new_size_gb: float) -> LunInfo:
-        """Grow a LUN to ``new_size_gb`` (the new total size, not the increment)."""
+    async def get_performance(self) -> PerformanceSample: ...
 
     @abstractmethod
-    async def create_lun_group(self, name: str, lun_ids: Sequence[str] = ()) -> LunGroupInfo: ...
+    async def get_hardware_status(self) -> HardwareStatus: ...
 
     @abstractmethod
-    async def map_to_host(self, lun_group_id: str, host_name: str) -> MappingInfo:
-        """Expose a LUN group to a host (the host is created when it does not exist)."""
+    async def get_active_alarms(self) -> list[AlarmInfo]: ...
 
-    # ---- snapshots (block and file) ---------------------------------------------
+    # ---- backup orchestration ------------------------------------------------------------
     @abstractmethod
-    async def create_snapshot(
-        self, resource_id: str, name: str, resource_type: Literal["lun", "filesystem"] = "lun"
-    ) -> SnapshotInfo: ...
-
-    # ---- file ------------------------------------------------------------------
-    @abstractmethod
-    async def create_filesystem(
-        self, name: str, size_gb: float, pool_id: str | None = None
-    ) -> FileSystemInfo: ...
+    async def list_policies(self) -> list[PolicyInfo]: ...
 
     @abstractmethod
-    async def delete_filesystem(self, filesystem_id: str) -> None: ...
+    async def create_policy(
+        self,
+        name: str,
+        cron_schedule: str,
+        backup_type: Literal["full", "incremental"],
+        retention_days: int,
+        worm_enabled: bool = False,
+    ) -> PolicyInfo: ...
 
     @abstractmethod
-    async def create_share(
-        self, filesystem_id: str, protocol: Literal["nfs", "cifs"], name: str | None = None
-    ) -> ShareInfo: ...
+    async def delete_policy(self, policy_id: str) -> None: ...
 
     @abstractmethod
-    async def set_quota(
-        self, filesystem_id: str, hard_gb: float, soft_gb: float | None = None
-    ) -> QuotaInfo: ...
-
-    # ---- object ----------------------------------------------------------------
-    @abstractmethod
-    async def create_bucket(self, name: str, owner: str, quota_gb: float | None = None) -> BucketInfo: ...
+    async def create_asset(
+        self, name: str, asset_type: str, source_ip: str = "", agent_version: str = ""
+    ) -> AssetInfo: ...
 
     @abstractmethod
-    async def delete_bucket(self, name: str) -> None: ...
+    async def trigger_backup(
+        self,
+        asset_id: str,
+        policy_id: str | None = None,
+        backup_type: Literal["full", "incremental"] | None = None,
+    ) -> str:
+        """Start an ad-hoc backup and return the appliance task id (the call itself is asynchronous)."""
 
     @abstractmethod
-    async def set_bucket_quota(self, name: str, quota_gb: float) -> BucketInfo: ...
+    async def get_task(self, task_id: str) -> TaskInfo: ...
 
     @abstractmethod
-    async def generate_s3_credentials(self, owner: str) -> S3Credentials: ...
+    async def cancel_task(self, task_id: str) -> TaskInfo: ...
 
-    # ---- telemetry ---------------------------------------------------------------
+    # ---- immutability -----------------------------------------------------------------------
     @abstractmethod
-    async def get_capacity_metrics(self) -> CapacityMetrics: ...
-
-    @abstractmethod
-    async def get_reduction_ratio(self) -> ReductionRatio: ...
+    async def create_filesystem(self, name: str, size_gb: float) -> str:
+        """Create a backup file system and return its id (WORM policies attach to file systems)."""
 
     @abstractmethod
-    async def get_active_alarms(self) -> list[Alarm]: ...
+    async def create_worm_policy(
+        self,
+        filesystem_id: str,
+        name: str,
+        retention_days: int,
+        mode: Literal["enterprise", "compliance"] = "compliance",
+    ) -> WormPolicyInfo: ...
 
     @abstractmethod
-    async def get_performance_metrics(self) -> PerformanceMetrics: ...
+    async def list_backup_copies(self) -> list[BackupCopy]: ...

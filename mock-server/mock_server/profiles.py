@@ -1,61 +1,20 @@
-"""Behaviour profiles for the two simulated products."""
+"""Fixed characteristics of the simulated OceanProtect appliance."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-SECTORS_PER_GB = 2 * 1024 * 1024  # 512-byte sectors, Huawei's capacity unit
 GB = 1024**3
 TB = 1024**4
+SECTOR = 512
+SECTORS_PER_GB = GB // SECTOR
 
+MODELS = ("OceanProtect X3000", "OceanProtect X6000", "OceanProtect X8000", "OceanProtect X9000")
 
-@dataclass(frozen=True)
-class Profile:
-    key: str
-    product_mode: str
-    product_version: str
-    pool_total_bytes: int
-    supports_block: bool
-    supports_object: bool
-    supports_protection: bool  # WORM + backup retention
-    iops: tuple[int, int]
-    latency_us: tuple[int, int]
-    bandwidth_mbps: tuple[int, int]
-    thin_ratio: tuple[float, float]
-    dedupe_ratio: tuple[float, float]
-    compression_ratio: tuple[float, float]
+# Ratios are N:1. total reduction = dedupe * compression (20:1 - 42:1)
+DEDUPE_RANGE = (8.0, 12.0)
+COMPRESSION_RANGE = (2.5, 3.5)
 
+# Backup ingestion is throughput oriented, not IOPS oriented.
+WRITE_MBPS_RANGE = (2_500, 8_000)
+READ_MBPS_RANGE = (400, 2_500)
+IOPS_RANGE = (8_000, 40_000)
+STREAMS_PER_CONTROLLER = (16, 96)
 
-DORADO = Profile(
-    key="dorado",
-    product_mode="OceanStor Dorado 5000 V7",
-    product_version="V700R001C00",
-    pool_total_bytes=200 * TB,
-    supports_block=True,
-    supports_object=True,
-    supports_protection=False,
-    iops=(300_000, 1_200_000),
-    latency_us=(120, 900),  # always sub-millisecond
-    bandwidth_mbps=(4_000, 12_000),
-    thin_ratio=(1.8, 3.5),
-    dedupe_ratio=(1.5, 3.0),
-    compression_ratio=(2.0, 4.0),
-)
-
-OCEANPROTECT = Profile(
-    key="oceanprotect",
-    product_mode="OceanProtect X8000",
-    product_version="1.6.0",
-    pool_total_bytes=1024 * TB,
-    supports_block=False,
-    supports_object=False,
-    supports_protection=True,
-    iops=(8_000, 40_000),
-    latency_us=(1_500, 9_000),
-    bandwidth_mbps=(6_000, 20_000),
-    thin_ratio=(1.0, 1.2),
-    dedupe_ratio=(8.0, 12.0),
-    compression_ratio=(2.5, 3.5),  # dedupe * compression lands in 20:1 - 42:1
-)
-
-PROFILES = {p.key: p for p in (DORADO, OCEANPROTECT)}
+BACKUP_TYPES = {1: "full", 2: "incremental"}

@@ -1,24 +1,20 @@
-from .base import StorageDriverBase
-from .dorado_v7 import DoradoV7Driver
+from .base import BackupDriverBase
 from .errors import NotSupportedError, StorageDriverError
 from .huawei_client import DeviceConnection
 from .oceanprotect import OceanProtectDriver
 
 __all__ = [
+    "BackupDriverBase",
     "DeviceConnection",
-    "DoradoV7Driver",
     "NotSupportedError",
     "OceanProtectDriver",
-    "StorageDriverBase",
     "StorageDriverError",
     "create_driver",
 ]
 
 
-def create_driver(model: str, connection: DeviceConnection) -> StorageDriverBase:
-    """Factory used by services: pick the driver from ``StorageDevice.model``."""
-    drivers = {"dorado_v7": DoradoV7Driver, "oceanprotect": OceanProtectDriver}
-    try:
-        return drivers[str(model)](connection)
-    except KeyError:
-        raise ValueError(f"No driver for model {model!r}") from None
+def create_driver(model: str, connection: DeviceConnection) -> BackupDriverBase:
+    """Factory used by services. Every supported OceanProtect model speaks the same dialect."""
+    if str(model) in ("x3000", "x6000", "x8000", "x9000"):
+        return OceanProtectDriver(connection)
+    raise ValueError(f"No driver for model {model!r}")

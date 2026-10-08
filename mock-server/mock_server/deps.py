@@ -1,4 +1,4 @@
-"""Shared request helpers: session check, profile gates, list filtering."""
+"""Shared request helpers: session check and list filtering."""
 
 from __future__ import annotations
 
@@ -19,20 +19,6 @@ def require_session(request: Request) -> MockState:
     state = get_state(request)
     if not state.session_valid(request.headers.get("iBaseToken")):
         raise E.HuaweiError(E.UNAUTHORIZED, "The user is not logged in or the session expired.")
-    return state
-
-
-def require_block(request: Request) -> MockState:
-    state = require_session(request)
-    if not state.profile.supports_block:
-        raise E.HuaweiError(E.NOT_SUPPORTED, "Block services are not supported on this device.")
-    return state
-
-
-def require_protection(request: Request) -> MockState:
-    state = require_session(request)
-    if not state.profile.supports_protection:
-        raise E.HuaweiError(E.NOT_SUPPORTED, "Data protection features are not supported.")
     return state
 
 

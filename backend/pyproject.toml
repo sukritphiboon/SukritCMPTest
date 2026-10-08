@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cmp-backend"
 version = "0.1.0"
-description = "Cloud Management Platform backend for Huawei OceanStor Dorado V7 / OceanProtect"
+description = "OceanProtect CMP backend: monitoring, telemetry analytics and backup orchestration"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.110",

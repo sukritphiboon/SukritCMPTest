@@ -14,29 +14,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.crypto import SecretCipher, get_cipher
-from app.drivers import DeviceConnection, StorageDriverBase, StorageDriverError, create_driver
-from app.models import StorageDevice
+from app.drivers import BackupDriverBase, DeviceConnection, StorageDriverError, create_driver
+from app.models import BackupTarget
 
 from .audit import audited
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 
-DriverFactory = Callable[[StorageDevice, SecretCipher], StorageDriverBase]
+DriverFactory = Callable[[BackupTarget, SecretCipher], BackupDriverBase]
 
 
-def default_driver_factory(device: StorageDevice, cipher: SecretCipher) -> StorageDriverBase:
+def default_driver_factory(target: BackupTarget, cipher: SecretCipher) -> BackupDriverBase:
     settings = get_settings()
-    username, password = device.get_credentials(cipher)
+    username, password = target.get_credentials(cipher)
     connection = DeviceConnection(
-        device.ip_address,
-        device.management_port,
+        target.ip_address,
+        target.management_port,
         username,
         password,
         https=settings.device_https,
         verify_tls=settings.device_verify_tls,
     )
-    return create_driver(device.model.value, connection)
+    return create_driver(target.model.value, connection)
 
 
 @dataclass
@@ -51,8 +51,8 @@ class Ctx:
         return get_cipher()
 
     @asynccontextmanager
-    async def driver(self, device: StorageDevice) -> AsyncIterator[StorageDriverBase]:
-        drv = self.factory(device, self.cipher)
+    async def driver(self, target: BackupTarget) -> AsyncIterator[BackupDriverBase]:
+        drv = self.factory(target, self.cipher)
         try:
             await drv.connect()
             yield drv

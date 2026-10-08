@@ -1,58 +1,61 @@
-"""ARQ worker: periodic telemetry polling of registered storage devices."""
+"""ARQ worker: polls every appliance on a fixed rhythm (default every 30 seconds)."""
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
+import logging
+from typing import Any
 
 from arq import cron
 from arq.connections import RedisSettings
-from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.crypto import get_cipher
 from app.core.database import get_sessionmaker
-from app.drivers import DeviceConnection, StorageDriverError, create_driver
-from app.models import HealthStatus, StorageDevice
+from app.services.context import default_driver_factory
+from app.services.telemetry.collector import housekeeping, poll_all
+
+log = logging.getLogger(__name__)
 
 
-async def poll_device(ctx: dict, device_id: str) -> dict:
-    """Log in to one array, read alarms and capacity, and update its health status."""
-    async with get_sessionmaker()() as session:
-        device = await session.get(StorageDevice, uuid.UUID(device_id))
-        if device is None:
-            return {"device": device_id, "status": "missing"}
-        username, password = device.get_credentials(get_cipher())
-        connection = DeviceConnection(device.ip_address, device.management_port, username, password)
-        try:
-            async with create_driver(device.model, connection) as driver:
-                alarms = await driver.get_active_alarms()
-                capacity = await driver.get_capacity_metrics()
-        except StorageDriverError:
-            device.health_status = HealthStatus.FAULT
-            result = {"device": device_id, "status": "unreachable"}
-        else:
-            severe = any(a.severity in ("major", "critical") for a in alarms)
-            device.health_status = HealthStatus.DEGRADED if severe else HealthStatus.HEALTHY
-            device.last_seen_at = datetime.now(UTC)
-            result = {
-                "device": device_id,
-                "status": device.health_status.value,
-                "used_percent": capacity.used_percent,
-            }
-        await session.commit()
-        return result
+def poll_seconds(interval: int) -> set[int]:
+    """Seconds of a minute at which to poll, for example 30 -> {0, 30}. The interval must divide 60."""
+    if interval < 1 or 60 % interval:
+        raise ValueError(
+            "CMP_TELEMETRY_INTERVAL_SECONDS must be a divisor of 60 (1, 2, 3, 5, 6, 10, 12, 15, 20, 30, 60)"
+        )
+    return set(range(0, 60, interval))
 
 
-async def poll_all_devices(ctx: dict) -> int:
-    async with get_sessionmaker()() as session:
-        ids = (await session.scalars(select(StorageDevice.id))).all()
-    for device_id in ids:
-        await poll_device(ctx, str(device_id))
-    return len(ids)
+async def startup(ctx: dict[str, Any]) -> None:
+    ctx.setdefault("maker", get_sessionmaker())
+    ctx.setdefault("factory", default_driver_factory)
+    ctx.setdefault("cipher", get_cipher())
+
+
+async def collect_metrics(ctx: dict[str, Any]) -> dict[str, int]:
+    """Poll all appliances once. Failures are stored as target health, never raised."""
+    results = await poll_all(
+        ctx["maker"], ctx["factory"], ctx["cipher"], concurrency=get_settings().telemetry_concurrency
+    )
+    failed = sum(1 for r in results if not r.ok)
+    if failed:
+        log.warning("%d of %d appliances could not be polled", failed, len(results))
+    return {"polled": len(results), "failed": failed}
+
+
+async def purge_old_data(ctx: dict[str, Any]) -> dict[str, int]:
+    return await housekeeping(ctx["maker"])
 
 
 class WorkerSettings:
-    functions = [poll_device]
-    cron_jobs = [cron(poll_all_devices, minute=set(range(0, 60, 5)))]
+    on_startup = startup
+    functions = [collect_metrics, purge_old_data]
+    cron_jobs = [
+        cron(
+            collect_metrics,
+            second=poll_seconds(get_settings().telemetry_interval_seconds),
+            run_at_startup=True,
+        ),
+        cron(purge_old_data, hour=3, minute=10, second=0),
+    ]
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

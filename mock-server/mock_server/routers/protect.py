@@ -10,7 +10,8 @@ from typing import Any
 from fastapi import APIRouter, Body, Request
 
 from .. import envelope as E
-from ..deps import require_protection, select
+from ..deps import require_session as require_protection
+from ..deps import select
 
 router = APIRouter(prefix="/deviceManager/rest/{device_id}")
 

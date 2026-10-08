@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from mock_server.main import create_app as create_mock
@@ -5,29 +7,48 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_driver_factory
+from app.api.deps import get_driver_factory, get_now
+from app.core.crypto import get_cipher
 from app.core.database import get_session
-from app.drivers import DeviceConnection, DoradoV7Driver, OceanProtectDriver
+from app.drivers import DeviceConnection, OceanProtectDriver
 from app.main import create_app
-from app.models import Base, DeviceModel
+from app.models import Base
+from app.services.telemetry.collector import poll_all
 from tests.conftest import MOCK_PASSWORD
 
 KEY = {"X-API-Key": "test-key"}
+T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+GB = 1024**3
 
 
 class Env:
-    """A CMP app on SQLite, wired to two in-process mock arrays."""
+    """A CMP app on SQLite wired to in-process mock appliances and a controllable clock."""
 
-    def __init__(self, http, maker, mocks):
-        self.http, self.maker, self.mocks = http, maker, mocks
+    def __init__(self, http, maker):
+        self.http, self.maker = http, maker
+        self.mocks: dict[str, object] = {}
+        self.broken: set[str] = set()
+        self.clock = T0
 
-    @property
-    def dorado_mock(self):
-        return self.mocks[DeviceModel.DORADO_V7].state.mock
+    def mock(self, name="op-1"):
+        return self.mocks[name].state.mock
 
-    @property
-    def protect_mock(self):
-        return self.mocks[DeviceModel.OCEANPROTECT].state.mock
+    def factory(self, target, cipher):
+        username, password = target.get_credentials(cipher)
+        conn = DeviceConnection("mock", 8088, username, password, https=False)
+        if target.name in self.broken:
+
+            def refuse(request):
+                raise httpx.ConnectError("link down")
+
+            return OceanProtectDriver(conn, transport=httpx.MockTransport(refuse))
+        return OceanProtectDriver(conn, transport=httpx.ASGITransport(app=self.mocks[target.name]))
+
+    def tick(self, seconds: float):
+        """Move the CMP clock and every mock appliance's clock forward together."""
+        self.clock += timedelta(seconds=seconds)
+        for app in self.mocks.values():
+            app.state.mock.advance_time(seconds)
 
     async def ok(self, method, url, status=None, **kw):
         r = await self.http.request(method, f"/api/v1{url}", **kw)
@@ -40,32 +61,33 @@ class Env:
         assert r.status_code == status, r.text
         return r.json()
 
-    async def device(self, model="dorado_v7", name=None, **extra):
-        body = {
-            "name": name or model,
-            "ip_address": "mock",
-            "username": "admin",
-            "password": MOCK_PASSWORD,
-            "model": model,
-            **extra,
-        }
-        return await self.ok("POST", "/devices", json=body)
-
-    async def tenant(self, name="acme", block=1000, file=1000, obj=1000, **extra):
+    async def add_target(self, name="op-1", seed=1, model="x8000", **mock_options):
+        self.mocks[name] = create_mock(seed=seed, **mock_options)
         return await self.ok(
             "POST",
-            "/tenants",
+            "/targets",
             json={
                 "name": name,
-                "quota_block_gb": block,
-                "quota_file_gb": file,
-                "quota_object_gb": obj,
-                **extra,
+                "ip_address": "mock",
+                "username": "admin",
+                "password": MOCK_PASSWORD,
+                "model": model,
             },
         )
 
+    async def collect(self, concurrency=1):
+        return await poll_all(self.maker, self.factory, get_cipher(), now=self.clock, concurrency=concurrency)
+
     async def audit(self, **params):
         return (await self.ok("GET", "/audit-logs", params=params))["items"]
+
+    def pin(self, name="op-1", write=4000, read=900, iops=20000, streams=30):
+        self.mock(name).perf_override = {
+            "write_mbps": write,
+            "read_mbps": read,
+            "iops": iops,
+            "streams_per_controller": streams,
+        }
 
 
 @pytest.fixture
@@ -82,29 +104,18 @@ async def env():
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    mocks = {
-        DeviceModel.DORADO_V7: create_mock("dorado", seed=1),
-        DeviceModel.OCEANPROTECT: create_mock("oceanprotect", seed=2),
-    }
-
-    def factory(device, cipher):
-        username, password = device.get_credentials(cipher)
-        connection = DeviceConnection("mock", 8088, username, password, https=False)
-        cls = DoradoV7Driver if device.model == DeviceModel.DORADO_V7 else OceanProtectDriver
-        return cls(connection, transport=httpx.ASGITransport(app=mocks[device.model]))
-
     async def session_override():
         async with maker() as session:
             yield session
 
     app = create_app()
-    app.dependency_overrides[get_session] = session_override
-    app.dependency_overrides[get_driver_factory] = lambda: factory
     http = httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
-        base_url="http://cmp",
-        headers=KEY,
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://cmp", headers=KEY
     )
-    yield Env(http, maker, mocks)
+    e = Env(http, maker)
+    app.dependency_overrides[get_session] = session_override
+    app.dependency_overrides[get_driver_factory] = lambda: e.factory
+    app.dependency_overrides[get_now] = lambda: e.clock
+    yield e
     await http.aclose()
     await engine.dispose()

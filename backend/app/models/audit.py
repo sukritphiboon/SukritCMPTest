@@ -21,15 +21,12 @@ class AuditLog(UUIDPrimaryKey, Base):
         index=True,
     )
     actor: Mapped[str] = mapped_column(String(128), index=True)
-    action: Mapped[str] = mapped_column(String(64), index=True)  # e.g. "lun.create"
-    resource_type: Mapped[str] = mapped_column(String(32))  # lun | filesystem | bucket | device ...
+    action: Mapped[str] = mapped_column(String(64), index=True)  # e.g. "alarm.acknowledge"
+    resource_type: Mapped[str] = mapped_column(String(32))
     resource_id: Mapped[str | None] = mapped_column(String(64), default=None)
     resource_name: Mapped[str | None] = mapped_column(String(128), default=None)
-    storage_device_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("storage_devices.id", ondelete="SET NULL"), index=True, default=None
-    )
-    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("tenants.id", ondelete="SET NULL"), index=True, default=None
+    backup_target_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("backup_targets.id", ondelete="SET NULL"), index=True, default=None
     )
     outcome: Mapped[AuditOutcome] = mapped_column(
         str_enum(AuditOutcome, "audit_outcome"), default=AuditOutcome.SUCCESS
