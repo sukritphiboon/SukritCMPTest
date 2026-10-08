@@ -94,6 +94,19 @@ async def list_assets(request: Request, filter: str | None = None, range: str | 
     return E.ok(select(list(state.objects["asset"].values()), filter, range))
 
 
+@router.delete("/asset/{asset_id}")
+async def delete_asset(request: Request, asset_id: str):
+    state = require_session(request)
+    asset = state.get("asset", asset_id)
+    if any(
+        j["ASSETID"] == asset_id and state.task_view(j["taskId"])["STATUS"] in ("PENDING", "RUNNING")
+        for j in state.objects["job"].values()
+    ):
+        raise E.HuaweiError(E.OBJECT_IN_USE, "The asset has a running backup.")
+    state.delete("asset", asset["ID"])
+    return E.ok()
+
+
 # ---- jobs and tasks --------------------------------------------------------------
 @router.post("/backup_job")
 async def start_backup(request: Request, body: dict[str, Any] = Body(...)):

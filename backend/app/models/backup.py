@@ -44,6 +44,7 @@ class ProtectedAsset(UUIDPrimaryKey, Timestamps, Base):
     asset_type: Mapped[AssetType] = mapped_column(str_enum(AssetType, "asset_type"))
     source_ip: Mapped[str | None] = mapped_column(String(45), default=None)
     agent_version: Mapped[str | None] = mapped_column(String(32), default=None)
+    array_asset_id: Mapped[str | None] = mapped_column(String(32), default=None)  # id on the appliance
     backup_target_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("backup_targets.id", ondelete="CASCADE"), index=True
     )

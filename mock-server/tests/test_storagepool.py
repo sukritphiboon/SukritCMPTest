@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from mock_server.profiles import GB, SECTOR
@@ -6,6 +8,41 @@ from tests.conftest import make_client
 
 def gb(sectors) -> float:
     return int(sectors) * SECTOR / GB
+
+
+def figures(pool):
+    """(ingested, post-dedup, physical) in sectors, taken from the documented fields."""
+    ingested = int(pool["DEDUPINVOLVEDCAPACITY"])
+    return ingested, ingested - int(pool["DEDUPEDCAPACITY"]), int(pool["USERCONSUMEDCAPACITY"])
+
+
+def rate(text) -> float:
+    """The real API sends ratios as JSON strings; numerator / denominator is the N in N:1."""
+    d = json.loads(text)
+    return int(d["numerator"]) / int(d["denominator"])
+
+
+async def test_pool_uses_the_documented_field_names(op):
+    pool = (await op.ok("GET", "/storagepool"))[0]
+    for name in (
+        "USERTOTALCAPACITY",
+        "USERFREECAPACITY",
+        "USERCONSUMEDCAPACITY",
+        "USERCONSUMEDCAPACITYPERCENTAGE",
+        "DEDUPINVOLVEDCAPACITY",
+        "DEDUPEDCAPACITY",
+        "COMPRESSINVOLVEDCAPACITY",
+        "COMPRESSEDCAPACITY",
+        "REDUCTIONINVOLVEDCAPACITY",
+        "DEDUPLICATIONRATE",
+        "COMPRESSIONRATE",
+        "SPACEREDUCTIONRATE",
+        "HEALTHSTATUS",
+        "RUNNINGSTATUS",
+    ):
+        assert name in pool, name
+    assert pool["HEALTHSTATUS"] == "1" and pool["RUNNINGSTATUS"] == "27" and pool["TYPE"] == 216
+    assert set(json.loads(pool["SPACEREDUCTIONRATE"])) == {"numerator", "denominator", "logic"}
 
 
 async def test_pool_exposes_the_four_capacity_figures(op):
@@ -18,29 +55,37 @@ async def test_pool_exposes_the_four_capacity_figures(op):
     assert raw == pytest.approx(500 * 1024)  # 500 TB
     assert used == pytest.approx(0.4 * raw, rel=1e-3)  # starts 40 % full
     assert used + free == pytest.approx(raw, abs=0.01)
-    assert gb(pool["LOGICALWRITTENCAPACITY"]) > used * 20
+    assert pool["USERCONSUMEDCAPACITYPERCENTAGE"] == "40"
+    assert gb(pool["DEDUPINVOLVEDCAPACITY"]) > used * 20
 
 
-async def test_reduction_formulas_hold(op):
-    """total = ingested/physical, dedup = (ingested-post)/ingested, compression = post/physical."""
+async def test_reduction_fields_agree_with_each_other(op):
+    """total = ingested/physical, dedup = ingested/post-dedup, compression = post-dedup/physical."""
     pool = (await op.ok("GET", "/storagepool"))[0]
-    ingested, post, phys = (
-        int(pool[k]) for k in ("LOGICALWRITTENCAPACITY", "POSTDEDUPCAPACITY", "USERCONSUMEDCAPACITY")
+    ingested, post, phys = figures(pool)
+    assert 0 < phys < post < ingested
+    assert (
+        abs(int(pool["COMPRESSINVOLVEDCAPACITY"]) - post) <= 1
+    )  # compression starts where deduplication ends
+    assert (
+        abs(int(pool["COMPRESSINVOLVEDCAPACITY"]) - int(pool["COMPRESSEDCAPACITY"]) - phys) <= 1
+    )  # sector rounding
+    assert rate(pool["SPACEREDUCTIONRATE"]) == pytest.approx(ingested / phys, rel=1e-2)
+    assert rate(pool["DEDUPLICATIONRATE"]) == pytest.approx(ingested / post, rel=1e-2)
+    assert rate(pool["COMPRESSIONRATE"]) == pytest.approx(post / phys, rel=1e-2)
+    assert rate(pool["DEDUPLICATIONRATE"]) * rate(pool["COMPRESSIONRATE"]) == pytest.approx(
+        rate(pool["SPACEREDUCTIONRATE"]), rel=2e-2
     )
-    assert ingested / phys == pytest.approx(float(pool["DATAREDUCTION_RATIO"]), rel=1e-3)
-    assert (ingested - post) / ingested == pytest.approx(float(pool["DEDUPRATIO"]), abs=1e-4)
-    assert post / phys == pytest.approx(float(pool["COMPRESSIONRATIO"]), rel=1e-3)
-    assert float(pool["DEDUPFACTOR"]) * float(pool["COMPRESSIONRATIO"]) == pytest.approx(
-        float(pool["DATAREDUCTION_RATIO"]), rel=1e-3
-    )
+    assert ingested / phys == pytest.approx(op.mock.total_ratio, rel=1e-3)
 
 
 async def test_total_ratio_is_20_to_42_for_every_seed():
     for seed in range(30):
         c = await make_client(seed)
         pool = (await c.ok("GET", "/storagepool"))[0]
-        assert 20.0 <= float(pool["DATAREDUCTION_RATIO"]) <= 42.0
-        assert 0.85 <= float(pool["DEDUPRATIO"]) <= 0.92
+        assert 20.0 <= rate(pool["SPACEREDUCTIONRATE"]) <= 42.5
+        ingested, post, _ = figures(pool)
+        assert 0.85 <= (ingested - post) / ingested <= 0.92  # the removed fraction
         await c.http.aclose()
 
 

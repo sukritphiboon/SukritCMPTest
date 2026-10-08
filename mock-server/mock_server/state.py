@@ -10,10 +10,12 @@ from typing import Any
 from . import envelope as E
 from . import profiles as P
 
-SESSION_TTL = 1800
+SESSION_TTL = 1200  # the reference: the session timeout of the server is 20 minutes
 DAY = 86400
-LEVELS = {"Critical": "4", "Major": "3", "Warning": "2"}
-HEALTH_OK, HEALTH_FAULT, HEALTH_DEGRADED = "1", "2", "3"
+# Alarm severity as in the reference: 3 = warning, 5 = major, 6 = critical
+LEVELS = {"Critical": 6, "Major": 5, "Warning": 3}
+# HEALTHSTATUS: 1 = normal, 2 = faulty, 5 = degraded
+HEALTH_OK, HEALTH_FAULT, HEALTH_DEGRADED = "1", "2", "5"
 HEALTH_CODES = {"ok": HEALTH_OK, "fault": HEALTH_FAULT, "degraded": HEALTH_DEGRADED}
 FINAL_STATUSES = ("SUCCESS", "FAILED", "PARTIALLY_SUCCESSFUL")
 
@@ -40,14 +42,20 @@ class MockState:
         self.rng = random.Random(seed)
         self.time_offset = 0.0
         self.created_at = time.time()
-        self.device_id = "".join(self.rng.choice("0123456789") for _ in range(12))
-        self.serial_number = "2102" + "".join(self.rng.choice("0123456789ABCDEF") for _ in range(12))
+        alphabet = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+        self.device_id = "2102351" + "".join(self.rng.choice(alphabet) for _ in range(13))
+        self.serial_number = self.device_id
         self.sessions: dict[str, float] = {}
+        self.cookies: dict[str, str] = {}  # iBaseToken -> value of the session cookie
         self._counters: dict[str, int] = defaultdict(int)
         self.objects: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
         self.tasks: dict[str, dict[str, Any]] = {}
         self.alarms: list[dict[str, Any]] = []
         self.perf_override: dict[str, Any] = {}
+        self.next_backup: dict[
+            str, Any
+        ] = {}  # test hook: {'outcome', 'size_gb', 'duration_s'} for the next task
+        self.task_lost: set[str] = set()  # test hook: tasks the appliance has 'forgotten'
         self.extra_physical_bytes = 0
         # data reduction: ingested / post-dedup = dedupe, post-dedup / physical = compression
         self.dedupe_x = round(self.rng.uniform(*P.DEDUPE_RANGE), 2)
@@ -64,25 +72,33 @@ class MockState:
         self.time_offset += seconds
 
     # ---- sessions --------------------------------------------------------
-    def login(self) -> str:
-        token = f"{self.rng.getrandbits(128):032x}"
+    def login(self) -> tuple[str, str]:
+        """Returns (iBaseToken, session cookie value); the reference requires both on every later request."""
+        token = f"{self.rng.getrandbits(256):064X}"
+        cookie = f"ismsession={self.rng.getrandbits(160):040X}"
         self.sessions[token] = self.now() + SESSION_TTL
-        return token
+        self.cookies[token] = cookie
+        return token, cookie
 
-    def session_valid(self, token: str | None) -> bool:
+    def session_valid(self, token: str | None, cookie: str | None) -> bool:
         expires = self.sessions.get(token or "")
-        if expires is None:
+        if expires is None or self.cookies.get(token or "") != cookie:
             return False
         if expires < self.now():
-            del self.sessions[token]  # type: ignore[arg-type]
+            self.drop_session(token)  # type: ignore[arg-type]
             return False
         return True
+
+    def drop_session(self, token: str) -> None:
+        self.sessions.pop(token, None)
+        self.cookies.pop(token, None)
 
     def heartbeat(self, token: str) -> None:
         self.sessions[token] = self.now() + SESSION_TTL
 
     def expire_all_sessions(self) -> None:
         self.sessions.clear()
+        self.cookies.clear()
 
     # ---- generic object store ---------------------------------------------
     def next_id(self, kind: str) -> str:
@@ -168,8 +184,8 @@ class MockState:
             hw["controller"][cid] = {
                 "ID": cid,
                 "NAME": f"Controller {cid}",
-                "CPUUSAGE": r.randint(25, 70),
-                "MEMORYUSAGE": r.randint(40, 80),
+                "CPUUSAGE": str(r.randint(25, 70)),
+                "MEMORYUSAGE": str(r.randint(40, 80)),
                 "HEALTHSTATUS": HEALTH_OK,
                 "RUNNINGSTATUS": "27",
             }
@@ -211,25 +227,40 @@ class MockState:
 
     # ---- alarms ----------------------------------------------------------------
     def add_alarm(self, level: str, name: str, event_id: str, start: int | None = None) -> dict[str, Any]:
+        """``event_id`` is the hexadecimal id (for example 0xF0C90002); the API also shows it in decimal."""
         if level not in LEVELS:
             raise E.HuaweiError(E.PARAM_ERROR, f"level must be one of {', '.join(LEVELS)}.")
         self._counters["alarm"] += 1
         alarm = {
-            "eventID": event_id,
-            "name": name,
+            "alarmObjType": 244,
+            "alarmStatus": 1,
+            "clearName": 0,
+            "clearTime": 0,
+            "confirmTime": 0,
+            "description": name,
+            "detail": name,
+            "eventID": int(event_id, 16),
+            "eventParam": "",
             "level": LEVELS[level],
-            "levelName": level,
-            "startTime": start or int(self.now()),
-            "sequence": str(self._counters["alarm"]),
-            "recoveryTime": 0,
             "location": f"Device {self.device_id}",
+            "name": name,
+            "position": 0,
+            "recoverTime": 0,
+            "room": "",
+            "sequence": self._counters["alarm"],
+            "sourceID": "",
+            "sourceType": "",
+            "startTime": start or int(self.now()),
+            "strEventID": event_id,
+            "suggestion": "",
+            "type": 1,
         }
         self.alarms.append(alarm)
         return alarm
 
     def clear_alarm(self, sequence: str) -> None:
         before = len(self.alarms)
-        self.alarms = [a for a in self.alarms if a["sequence"] != str(sequence)]
+        self.alarms = [a for a in self.alarms if str(a["sequence"]) != str(sequence)]
         if len(self.alarms) == before:
             raise E.HuaweiError(E.OBJECT_NOT_FOUND, "The alarm does not exist.")
 
@@ -265,13 +296,15 @@ class MockState:
         r = self.rng
         self._counters["task"] += 1
         task_id = f"T{self._counters['task']:06d}"
-        outcome = outcome or r.choices(FINAL_STATUSES, weights=(82, 8, 10))[0]
+        hook, self.next_backup = self.next_backup, {}
+        outcome = outcome or hook.get("outcome") or r.choices(FINAL_STATUSES, weights=(82, 8, 10))[0]
+        size_gb = hook.get("size_gb", size_gb)
         task = {
             "taskId": task_id,
             "jobId": job["ID"],
             "created": self.now(),
             "pending_s": 3.0,
-            "duration_s": float(r.randint(60, 600)),
+            "duration_s": float(hook.get("duration_s") or r.randint(60, 600)),
             "size_bytes": int(size_gb * P.GB),
             "outcome": outcome,
             "cancelled_at": None,
@@ -281,7 +314,7 @@ class MockState:
 
     def task_view(self, task_id: str) -> dict[str, Any]:
         t = self.tasks.get(task_id)
-        if t is None:
+        if t is None or task_id in self.task_lost:
             raise E.HuaweiError(E.OBJECT_NOT_FOUND, "The task does not exist.")
         elapsed = self.now() - t["created"]
         run_s, done_at = elapsed - t["pending_s"], t["pending_s"] + t["duration_s"]

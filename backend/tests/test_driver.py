@@ -54,7 +54,7 @@ async def test_performance_and_hardware(driver):
     hw = await driver.get_hardware_status()
     assert (len(hw.controllers), len(hw.nvram), len(hw.power_modules), len(hw.disks)) == (2, 2, 4, 24)
     assert hw.overall == HardwareHealth.OK
-    assert hw.controllers[0].cpu_percent == driver.mock.hardware["controller"]["0A"]["CPUUSAGE"]
+    assert hw.controllers[0].cpu_percent == int(driver.mock.hardware["controller"]["0A"]["CPUUSAGE"])
     assert hw.nvram[0].controller == "0A" and 0 <= hw.nvram[0].dedup_cache_hit_percent <= 100
     assert hw.disks[0].location == "DAE000.0" and hw.disks[23].role == "hot-spare"
 

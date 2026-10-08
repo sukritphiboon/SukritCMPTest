@@ -32,7 +32,8 @@ from .huawei_client import DeviceConnection, HuaweiClient
 
 SECTOR_BYTES = 512
 GB = 1024**3
-_SEVERITY = {"4": AlarmSeverity.CRITICAL, "3": AlarmSeverity.MAJOR, "2": AlarmSeverity.WARNING}
+# level of /alarm/currentalarm in the reference: 3 = warning, 5 = major, 6 = critical
+_SEVERITY = {"3": AlarmSeverity.WARNING, "5": AlarmSeverity.MAJOR, "6": AlarmSeverity.CRITICAL}
 _WORM_MODE = {"enterprise": 2, "compliance": 1}
 _ASSET_TYPES = {"vmware": "VMware", "database": "Database", "file_share": "FileShare", "lun": "LUN"}
 _ASSET_TYPES_BACK = {v: k for k, v in _ASSET_TYPES.items()}
@@ -87,9 +88,12 @@ class OceanProtectDriver(BackupDriverBase):
         if not pools:
             raise ResourceNotFoundError(1077948996, "No storage pool found.")
         p = pools[0]
-        physical, ingested, post = (
-            int(p[k]) for k in ("USERCONSUMEDCAPACITY", "LOGICALWRITTENCAPACITY", "POSTDEDUPCAPACITY")
-        )
+        # Documented fields: DEDUPINVOLVEDCAPACITY went into deduplication (the ingested data),
+        # DEDUPEDCAPACITY is what deduplication saved, USERCONSUMEDCAPACITY is what is on disk.
+        # All of them count 512-byte sectors.
+        physical = int(p["USERCONSUMEDCAPACITY"])
+        ingested = int(p["DEDUPINVOLVEDCAPACITY"])
+        post = ingested - int(p["DEDUPEDCAPACITY"])
         return PoolMetrics(
             raw_capacity_gb=_gb(p["USERTOTALCAPACITY"]),
             used_physical_gb=_gb(physical),
@@ -158,8 +162,8 @@ class OceanProtectDriver(BackupDriverBase):
     async def get_active_alarms(self) -> list[AlarmInfo]:
         return [
             AlarmInfo(
-                sequence=a["sequence"],
-                event_id=a["eventID"],
+                sequence=str(a["sequence"]),
+                event_id=a["strEventID"],  # hexadecimal; eventID is the same number in decimal
                 name=a["name"],
                 severity=_SEVERITY.get(str(a["level"]), AlarmSeverity.WARNING),
                 raised_at=_ts(a["startTime"]),
@@ -210,6 +214,9 @@ class OceanProtectDriver(BackupDriverBase):
             source_ip=d["SOURCEIP"],
             agent_version=d["AGENTVERSION"],
         )
+
+    async def delete_asset(self, asset_id: str) -> None:
+        await self.client.request("DELETE", f"/asset/{asset_id}")
 
     async def trigger_backup(
         self,

@@ -1,7 +1,7 @@
 # Backend REST API
 
 Base path `/api/v1`. Interactive reference: `GET /docs`. `GET /health` needs no key.
-The analytics endpoints are described in `telemetry.md`.
+The analytics endpoints are described in `telemetry.md`, backups in `backup-orchestration.md`.
 
 ## Authentication
 
@@ -15,6 +15,16 @@ log. Missing or wrong key: `401`. There are no roles yet: every key may do every
 | `POST /targets` | `name, ip_address, management_port (8088), username, password, model (x3000, x6000, x8000, x9000)`. The password is encrypted and never returned |
 | `GET /targets`, `GET/PATCH/DELETE /targets/{id}` | `PATCH` can change username or password alone |
 | `POST /targets/{id}/test` | Logs in and reads the identity (fills serial number, appliance id, firmware). Always `200`; check `reachable` |
+
+## Backups
+
+| Call | Notes |
+|---|---|
+| `POST/GET /backup-policies`, `GET/PATCH/DELETE /backup-policies/{id}` | cron, full/incremental, retention, WORM (`worm_enabled` needs an explicit `worm_mode`) |
+| `POST/GET /assets`, `GET/PATCH/DELETE /assets/{id}` | registered on the appliance as well; `PATCH {"policy_id": null}` removes the policy |
+| `POST /backup-jobs` | `202`, starts a backup |
+| `GET /backup-jobs`, `GET /backup-jobs/{id}?refresh=`, `GET /backup-jobs/summary` | list, follow, report |
+| `POST /backup-jobs/{id}/cancel` | stops a running job |
 
 ## Audit log
 

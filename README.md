@@ -14,10 +14,11 @@ with a built-in **mock appliance** so everything can be developed and tested wit
 
 | Done | Not yet |
 |---|---|
-| Data model, migration, AES-256 credential storage | Backup orchestration API (trigger, restore, SLA policies) |
-| Mock appliance with backup tasks, WORM, hardware, alarms | APScheduler for CMP-side backup schedules |
-| Telemetry collector (every 30 s), runway forecast | Frontend screens |
-| Overview / throughput / reduction / alarm API, audit log | Users and roles (one shared API key list for now) |
+| Data model, migration, AES-256 credential storage | Restore (instant restore) and SLA reports |
+| Mock appliance checked against the Huawei REST reference (`docs/reference-check.md`) | APScheduler for CMP-side backup schedules |
+| Telemetry collector (every 30 s), runway forecast | Pushing policies (retention, WORM) to the appliance |
+| Overview / throughput / reduction / alarm API, audit log | Frontend screens |
+| Backup orchestration: policies, assets, start / follow / cancel jobs, success-rate summary | Users and roles (one shared API key list for now) |
 
 ## Quick start
 
@@ -33,4 +34,4 @@ cd mock-server && uvicorn mock_server.main:app --port 8088
 Full stack: `cp .env.example .env`, set `CMP_ENCRYPTION_KEY` and `CMP_API_KEYS`, then `docker compose up --build`.
 Register the mock appliance in the CMP with host `mock-oceanprotect`, port `8088`, user `admin`, password `Admin@storage1`.
 
-See `docs/` for details.
+See `docs/` for details. **Read `docs/reference-check.md` before connecting a real appliance**: the error codes and the performance call are not verified.

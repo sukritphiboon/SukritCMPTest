@@ -13,6 +13,7 @@ from app.core.database import get_session
 from app.drivers import DeviceConnection, OceanProtectDriver
 from app.main import create_app
 from app.models import Base
+from app.services.backup.jobs import sync_active_jobs
 from app.services.telemetry.collector import poll_all
 from tests.conftest import MOCK_PASSWORD
 
@@ -80,6 +81,29 @@ class Env:
 
     async def audit(self, **params):
         return (await self.ok("GET", "/audit-logs", params=params))["items"]
+
+    async def add_policy(self, name="daily", **extra):
+        body = {
+            "name": name,
+            "cron_schedule": "0 1 * * *",
+            "backup_type": "full",
+            "retention_days": 30,
+            **extra,
+        }
+        return await self.ok("POST", "/backup-policies", json=body)
+
+    async def add_asset(self, target, name="vm-prod-01", asset_type="vmware", **extra):
+        body = {"backup_target_id": target["id"], "name": name, "asset_type": asset_type, **extra}
+        return await self.ok("POST", "/assets", json=body)
+
+    async def start(self, asset, **extra):
+        return await self.ok("POST", "/backup-jobs", status=202, json={"asset_id": asset["id"], **extra})
+
+    async def sync(self):
+        return await sync_active_jobs(self.maker, self.factory, get_cipher())
+
+    def next_backup(self, name="op-1", **hook):
+        self.mock(name).next_backup = hook
 
     def pin(self, name="op-1", write=4000, read=900, iops=20000, streams=30):
         self.mock(name).perf_override = {

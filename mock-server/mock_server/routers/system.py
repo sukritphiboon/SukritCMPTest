@@ -15,25 +15,47 @@ def _sectors(n: int) -> str:
     return str(n // SECTOR)
 
 
+def _rate(numerator: float, denominator: float) -> str:
+    """Ratios are JSON strings in the real API: numerator / denominator is the N in 'N:1'."""
+    if denominator <= 0:
+        return '{"numerator":"10", "denominator":"10","logic":"="}'
+    return f'{{"numerator":"{round(numerator / denominator * 100)}", "denominator":"100","logic":"="}}'
+
+
 def pool_view(state) -> dict:
+    """Pool fields use the names of the reference: capacities in sectors, ratios as JSON strings.
+
+    Reduction: DEDUPINVOLVEDCAPACITY is the data that went into deduplication (ingested), DEDUPEDCAPACITY what
+    deduplication saved, COMPRESSINVOLVEDCAPACITY the data that went into compression and
+    COMPRESSEDCAPACITY what compression saved; USERCONSUMEDCAPACITY is what is left on disk.
+    """
     n = state.pool_numbers()
-    dedup_fraction = (n["ingested"] - n["post_dedup"]) / n["ingested"] if n["ingested"] else 0.0
+    saved_by_dedup = n["ingested"] - n["post_dedup"]
+    saved_by_compression = n["post_dedup"] - n["physical"]
     return {
         "ID": "0",
         "NAME": "StoragePool001",
+        "TYPE": 216,
         "USAGETYPE": "1",
+        "NEWUSAGETYPE": 0,
         "HEALTHSTATUS": "1",
         "RUNNINGSTATUS": "27",
-        # capacities are counted in 512-byte sectors, like the real API
+        "PARENTID": "0",
+        "PARENTTYPE": 266,
+        "PARENTNAME": "StoragePool001",
         "USERTOTALCAPACITY": _sectors(n["raw"]),
         "USERCONSUMEDCAPACITY": _sectors(n["physical"]),
         "USERFREECAPACITY": _sectors(n["raw"] - n["physical"]),
-        "LOGICALWRITTENCAPACITY": _sectors(n["ingested"]),
-        "POSTDEDUPCAPACITY": _sectors(n["post_dedup"]),
-        "DEDUPRATIO": f"{dedup_fraction:.4f}",  # (ingested - post-dedup) / ingested
-        "DEDUPFACTOR": str(state.dedupe_x),  # ingested : post-dedup
-        "COMPRESSIONRATIO": str(state.compression_x),  # post-dedup : physical
-        "DATAREDUCTION_RATIO": f"{n['ingested'] / n['physical']:.2f}" if n["physical"] else "0",
+        "USERCONSUMEDCAPACITYPERCENTAGE": str(int(n["physical"] * 100 / n["raw"])),
+        "DATASPACE": _sectors(n["raw"] - n["physical"]),
+        "DEDUPINVOLVEDCAPACITY": _sectors(n["ingested"]),
+        "DEDUPEDCAPACITY": _sectors(saved_by_dedup),
+        "COMPRESSINVOLVEDCAPACITY": _sectors(n["post_dedup"]),
+        "COMPRESSEDCAPACITY": _sectors(saved_by_compression),
+        "REDUCTIONINVOLVEDCAPACITY": _sectors(n["ingested"]),
+        "DEDUPLICATIONRATE": _rate(n["ingested"], n["post_dedup"]),
+        "COMPRESSIONRATE": _rate(n["post_dedup"], n["physical"]),
+        "SPACEREDUCTIONRATE": _rate(n["ingested"], n["physical"]),
     }
 
 
@@ -60,9 +82,11 @@ async def list_pools(request: Request, filter: str | None = None, range: str | N
 
 
 @router.get("/alarm/currentalarm")
-async def current_alarms(request: Request, range: str | None = None):
+async def current_alarms(request: Request, filter: str | None = None, range: str | None = None):
+    """Newest first (the reference sorts by ``startTime,d``); filter on level, startTime, sequence ..."""
     state = require_session(request)
-    return E.ok(select(state.alarms, None, range))
+    newest_first = sorted(state.alarms, key=lambda a: (a["startTime"], a["sequence"]), reverse=True)
+    return E.ok(select(newest_first, filter, range))
 
 
 @router.get("/performancedata")

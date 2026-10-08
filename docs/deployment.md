@@ -13,7 +13,7 @@ docker compose up --build
 | redis | internal | ARQ queue |
 | mock-oceanprotect | 8088 | simulated appliance |
 | backend | 8000 | runs `alembic upgrade head` on start |
-| worker | - | `arq app.worker.settings.WorkerSettings`: polls every `CMP_TELEMETRY_INTERVAL_SECONDS` (30), housekeeping at 03:10 |
+| worker | - | `arq app.worker.settings.WorkerSettings`: polls every `CMP_TELEMETRY_INTERVAL_SECONDS` (30), follows running backups every `CMP_JOB_POLL_INTERVAL_SECONDS` (15), housekeeping at 03:10 |
 | frontend | 3000 | skeleton page |
 
 Run **one** worker. Two workers would both poll and store duplicate samples (a lock is not implemented).

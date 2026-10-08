@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # how often the worker polls every appliance (seconds); ARQ needs a divisor of 60
     telemetry_interval_seconds: int = 30
     telemetry_concurrency: int = 4
+    # how often running backup jobs are checked on the appliance (must divide 60)
+    job_poll_interval_seconds: int = 15
     # data older than this many intervals is reported as stale
     telemetry_stale_intervals: int = 3
     runway_window_days: int = 7

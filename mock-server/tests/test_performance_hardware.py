@@ -25,7 +25,9 @@ async def test_performance_can_be_pinned(op):
 async def test_hardware_inventory(op):
     controllers = await op.ok("GET", "/controller")
     assert [c["ID"] for c in controllers] == ["0A", "0B"]
-    assert all(0 <= c["CPUUSAGE"] <= 100 and 0 <= c["MEMORYUSAGE"] <= 100 for c in controllers)
+    assert all(
+        0 <= int(c["CPUUSAGE"]) <= 100 and 0 <= int(c["MEMORYUSAGE"]) <= 100 for c in controllers
+    )  # strings, like the real API
     nvram = await op.ok("GET", "/nvram")
     assert len(nvram) == 2 and all(0 <= n["DEDUPCACHEHITRATIO"] <= 100 for n in nvram)
     assert len(await op.ok("GET", "/power")) == 4
@@ -42,7 +44,9 @@ async def test_hardware_fault_injection(op):
     )
     disks = {d["ID"]: d for d in await op.ok("GET", "/disk")}
     assert disks["3"]["HEALTHSTATUS"] == "2" and disks["4"]["HEALTHSTATUS"] == "1"
-    assert (await op.ok("GET", "/power", params={"filter": "HEALTHSTATUS::3"}))[0]["ID"] == "PSU1"
+    assert (await op.ok("GET", "/power", params={"filter": "HEALTHSTATUS::5"}))[0][
+        "ID"
+    ] == "PSU1"  # 5 = degraded
     await op.http.post("/_mock/hardware_fault", json={"component": "disk", "id": 3, "health": "ok"})
     assert {d["HEALTHSTATUS"] for d in await op.ok("GET", "/disk")} == {"1"}
 
@@ -52,18 +56,42 @@ async def test_hardware_fault_validation(op):
     assert r.json()["error"]["code"] == 1077948996
 
 
-async def test_alarms_have_three_severity_levels(op):
+async def test_alarms_use_the_documented_levels(op):
+    """Reference: level 3 = warning, 5 = major, 6 = critical; eventID is decimal, strEventID hexadecimal."""
     seeded = await op.ok("GET", "/alarm/currentalarm")
-    assert {a["levelName"] for a in seeded} == {"Warning", "Major"}
-    for level in ("Critical", "Major", "Warning"):
-        r = await op.http.post("/_mock/alarms", json={"level": level, "name": f"{level} alarm"})
-        assert r.json()["levelName"] == level
+    assert {a["level"] for a in seeded} == {3, 5}
+    for level, number in (("Critical", 6), ("Major", 5), ("Warning", 3)):
+        r = await op.http.post(
+            "/_mock/alarms", json={"level": level, "name": f"{level} alarm", "eventID": "0xF0C90002"}
+        )
+        assert r.json()["level"] == number
     alarms = await op.ok("GET", "/alarm/currentalarm")
-    assert [a["levelName"] for a in alarms].count("Major") == 2
+    assert [a["level"] for a in alarms].count(5) == 2
+    last = next(
+        a for a in alarms if a["strEventID"] == "0xF0C90002" and a["level"] == 3
+    )  # the last one injected
+    assert (
+        last["strEventID"] == "0xF0C90002" and last["eventID"] == 4039704578
+    )  # same as the reference's example
+    assert (
+        last["alarmStatus"] == 1 and isinstance(last["sequence"], int) and isinstance(last["startTime"], int)
+    )
     sequences = [a["sequence"] for a in alarms]
     assert len(set(sequences)) == len(sequences)
-    await op.http.delete(f"/_mock/alarms/{sequences[0]}")
+    starts = [(a["startTime"], a["sequence"]) for a in alarms]
+    assert starts == sorted(starts, reverse=True)  # newest first, like the reference's default sort
+    await op.http.delete(f"/_mock/alarms/{sequences[-1]}")
     assert len(await op.ok("GET", "/alarm/currentalarm")) == len(alarms) - 1
+
+
+async def test_alarm_filter_by_level_and_time(op):
+    now = int(op.mock.now())
+    assert len(await op.ok("GET", "/alarm/currentalarm", params={"filter": "level::5"})) == 1
+    window = f"level::3 and startTime:[{now - 100000},{now}]"
+    assert len(await op.ok("GET", "/alarm/currentalarm", params={"filter": window})) == 1
+    assert (
+        await op.call("GET", "/alarm/currentalarm", params={"filter": f"startTime:[{now + 10},{now + 20}]"})
+    )["error"] == {"code": 0, "description": "0"}
 
 
 async def test_dedupe_cache_status_is_per_controller(op):

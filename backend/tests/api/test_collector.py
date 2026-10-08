@@ -63,8 +63,8 @@ async def test_one_poll_stores_every_kind_of_reading(env):
         "disks": 24,
     }
     ctrl = env.mock().hardware["controller"]
-    assert hw.max_cpu_percent == max(c["CPUUSAGE"] for c in ctrl.values())
-    assert hw.max_memory_percent == max(c["MEMORYUSAGE"] for c in ctrl.values())
+    assert hw.max_cpu_percent == max(int(c["CPUUSAGE"]) for c in ctrl.values())
+    assert hw.max_memory_percent == max(int(c["MEMORYUSAGE"]) for c in ctrl.values())
 
     t = await target_row(env)
     assert t.serial_number == env.mock().serial_number and t.device_id == env.mock().device_id

@@ -148,3 +148,38 @@ async def test_random_outcomes_are_mostly_successful():
     outcomes = [(await c.ok("GET", f"/task_list/{t}"))["STATUS"] for t in ids]
     assert outcomes.count("SUCCESS") > 35 and set(outcomes) <= {"SUCCESS", "FAILED", "PARTIALLY_SUCCESSFUL"}
     await c.http.aclose()
+
+
+async def test_next_backup_hook_decides_outcome_size_and_duration(op):
+    a = await asset(op)
+    await op.http.post("/_mock/next_backup", json={"outcome": "FAILED", "size_gb": 50, "duration_s": 100})
+    tid = (await op.ok("POST", "/backup_job", {"ASSETID": a["ID"]}))["taskId"]
+    op.mock.advance_time(60)
+    assert (await op.ok("GET", f"/task_list/{tid}"))["STATUS"] == "RUNNING"
+    op.mock.advance_time(60)
+    done = await op.ok("GET", f"/task_list/{tid}")
+    assert done["STATUS"] == "FAILED" and done["PROGRESS"] == 37
+    # the hook applies to one task only
+    other = (await op.ok("POST", "/backup_job", {"ASSETID": a["ID"], "SIMULATE_OUTCOME": "SUCCESS"}))[
+        "taskId"
+    ]
+    op.mock.advance_time(3600)
+    op.mock.sessions[op.token] = op.mock.now() + 100
+    assert (await op.ok("GET", f"/task_list/{other}"))["STATUS"] == "SUCCESS"
+
+
+async def test_lost_task_is_reported_as_unknown(op):
+    a = await asset(op)
+    tid = (await op.ok("POST", "/backup_job", {"ASSETID": a["ID"]}))["taskId"]
+    await op.http.post("/_mock/lose_task", json={"task_id": tid})
+    assert (await op.call("GET", f"/task_list/{tid}"))["error"]["code"] == 1077948996
+
+
+async def test_delete_asset_is_refused_while_a_backup_runs(op):
+    a = await asset(op)
+    await op.ok("POST", "/backup_job", {"ASSETID": a["ID"], "SIMULATE_OUTCOME": "SUCCESS"})
+    assert (await op.call("DELETE", f"/asset/{a['ID']}"))["error"]["code"] == 1077948995
+    op.mock.advance_time(3600)
+    op.mock.sessions[op.token] = op.mock.now() + 100
+    await op.ok("DELETE", f"/asset/{a['ID']}")
+    assert (await op.call("DELETE", f"/asset/{a['ID']}"))["error"]["code"] == 1077948996

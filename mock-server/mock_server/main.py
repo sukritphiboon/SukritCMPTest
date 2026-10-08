@@ -92,6 +92,20 @@ def create_app(
         app.state.mock.perf_override = {k: v for k, v in body.items() if v is not None}
         return {"ok": True}
 
+    @app.post("/_mock/next_backup")
+    async def next_backup(body: dict[str, Any]):
+        """Decide the next backup task: outcome (SUCCESS|FAILED|PARTIALLY_SUCCESSFUL), size_gb, duration_s."""
+        app.state.mock.next_backup = {
+            k: v for k, v in body.items() if k in ("outcome", "size_gb", "duration_s")
+        }
+        return {"ok": True}
+
+    @app.post("/_mock/lose_task")
+    async def lose_task(body: dict[str, Any]):
+        """Make the appliance forget a task id (it then answers 'not found')."""
+        app.state.mock.task_lost.add(str(body["task_id"]))
+        return {"ok": True}
+
     @app.post("/_mock/hardware_fault")
     async def hardware_fault(body: dict[str, Any]):
         item = app.state.mock.set_health(body["component"], str(body["id"]), body.get("health", "fault"))

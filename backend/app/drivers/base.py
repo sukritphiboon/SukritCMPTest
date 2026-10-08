@@ -79,6 +79,9 @@ class BackupDriverBase(ABC):
     ) -> AssetInfo: ...
 
     @abstractmethod
+    async def delete_asset(self, asset_id: str) -> None: ...
+
+    @abstractmethod
     async def trigger_backup(
         self,
         asset_id: str,
