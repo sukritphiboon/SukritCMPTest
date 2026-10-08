@@ -16,7 +16,9 @@ docker compose up --build
 | worker | - | `arq app.worker.settings.WorkerSettings`: polls every `CMP_TELEMETRY_INTERVAL_SECONDS` (30), follows running backups every `CMP_JOB_POLL_INTERVAL_SECONDS` (15), housekeeping at 03:10 |
 | frontend | 3000 | skeleton page |
 
-Run **one** worker. Two workers would both poll and store duplicate samples (a lock is not implemented).
+Run **one** worker. Two workers would both poll and store duplicate samples (a lock is not implemented for telemetry).
+The backup scheduler is protected against that: a firing is claimed in Redis, so a second worker would not start the backups twice.
+The scheduler runs inside the worker; set `CMP_SCHEDULER_TIMEZONE` (default `Asia/Bangkok`) to the zone policy schedules are written in.
 
 Keys: losing `CMP_ENCRYPTION_KEY` makes stored appliance credentials unreadable; rotating it needs a re-encryption script (not
 written). Set a strong `POSTGRES_PASSWORD`. Real appliances use https with self-signed certificates:

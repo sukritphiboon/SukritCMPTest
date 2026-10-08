@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.database import get_session
+from app.core.database import get_session, get_sessionmaker
 from app.core.security import get_actor
 from app.services.context import Ctx, DriverFactory, default_driver_factory
 
@@ -12,6 +12,11 @@ from app.services.context import Ctx, DriverFactory, default_driver_factory
 def get_driver_factory() -> DriverFactory:
     """Overridden in tests to point drivers at an in-process mock server."""
     return default_driver_factory
+
+
+def get_maker() -> async_sessionmaker[AsyncSession]:
+    """Session factory for work that needs several independent sessions. Overridden in tests."""
+    return get_sessionmaker()
 
 
 def get_now() -> datetime:
@@ -30,6 +35,7 @@ async def get_ctx(
 
 CtxDep = Annotated[Ctx, Depends(get_ctx)]
 NowDep = Annotated[datetime, Depends(get_now)]
+MakerDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_maker)]
 
 
 class Page:

@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # data older than this many intervals is reported as stale
     telemetry_stale_intervals: int = 3
     runway_window_days: int = 7
+    # CMP-side backup schedules (the cron of each backup policy)
+    scheduler_enabled: bool = True
+    scheduler_timezone: str = "Asia/Bangkok"  # one timezone for every policy cron
+    scheduler_sync_seconds: int = 30  # how soon a changed policy is picked up
+    scheduler_misfire_grace_seconds: int = 300  # a run that starts later than this after its time is skipped
+    scheduler_max_parallel_starts: int = 4  # backups started at the same moment by one policy run
     # "user:key,user2:key2" - the user name is recorded as the actor in the audit log
     api_keys: str = ""
     # how the CMP reaches the arrays (mock servers speak plain http)

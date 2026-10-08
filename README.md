@@ -15,10 +15,11 @@ with a built-in **mock appliance** so everything can be developed and tested wit
 | Done | Not yet |
 |---|---|
 | Data model, migration, AES-256 credential storage | Restore (instant restore) and SLA reports |
-| Mock appliance checked against the Huawei REST reference (`docs/reference-check.md`) | APScheduler for CMP-side backup schedules |
+| Mock appliance checked against the Huawei REST reference (`docs/reference-check.md`) | Mock server and driver for the real OceanProtect API (`/v1`, see `docs/reference-check.md`) |
 | Telemetry collector (every 30 s), runway forecast | Pushing policies (retention, WORM) to the appliance |
 | Overview / throughput / reduction / alarm API, audit log | Frontend screens |
 | Backup orchestration: policies, assets, start / follow / cancel jobs, success-rate summary | Users and roles (one shared API key list for now) |
+| Policy schedules: APScheduler in the worker, cron in the Asia/Bangkok zone by default | |
 
 ## Quick start
 

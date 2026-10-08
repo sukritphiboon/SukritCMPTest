@@ -2,25 +2,25 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.cron import CronError
+from app.core.cron import normalize as normalize_cron
 from app.models import AssetType, BackupType, JobStatus, WormMode
 
 Name = Annotated[str, Field(min_length=1, max_length=128)]
-_CRON_FIELD = re.compile(r"^[0-9A-Za-z*/,\-?]+$")
 
 
 def check_cron(value: str) -> str:
-    """Five space separated fields (minute hour day month weekday). Structure only, not the value ranges."""
-    fields = value.split()
-    if len(fields) != 5 or not all(_CRON_FIELD.match(f) for f in fields):
-        raise ValueError("cron_schedule needs five fields: minute hour day-of-month month day-of-week")
-    return " ".join(fields)
+    """A schedule must be one the scheduler can really run (same parser); bad values are refused."""
+    try:
+        return normalize_cron(value)
+    except CronError as exc:
+        raise ValueError(f"cron_schedule: {exc}") from exc
 
 
 Cron = Annotated[str, Field(max_length=64)]
@@ -76,8 +76,35 @@ class PolicyOut(ORM):
     worm_enabled: bool
     worm_mode: WormMode
     enabled: bool
+    next_run_at: datetime | None = None  # empty while the policy is disabled or its schedule cannot be read
+    schedule_timezone: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PolicySchedule(BaseModel):
+    cron_schedule: str
+    timezone: str
+    enabled: bool
+    runs: list[datetime]  # the next run times, in the schedule's timezone; empty while the policy is disabled
+
+
+class AssetRunResult(BaseModel):
+    asset_id: uuid.UUID
+    asset_name: str
+    outcome: Literal["started", "skipped", "failed"]
+    detail: str | None = None
+    job_id: uuid.UUID | None = None
+
+
+class PolicyRunOut(BaseModel):
+    policy_id: uuid.UUID
+    policy_name: str | None
+    status: Literal["ran", "duplicate", "not_found", "disabled"]
+    started: int
+    skipped: int
+    failed: int
+    results: list[AssetRunResult]
 
 
 # ---- assets ---------------------------------------------------------------------------------

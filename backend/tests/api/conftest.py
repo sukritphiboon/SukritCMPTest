@@ -7,7 +7,8 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.api.deps import get_driver_factory, get_now
+from app.api.deps import get_driver_factory, get_maker, get_now
+from app.core.config import get_settings
 from app.core.crypto import get_cipher
 from app.core.database import get_session
 from app.drivers import DeviceConnection, OceanProtectDriver
@@ -115,7 +116,7 @@ class Env:
 
 
 @pytest.fixture
-async def env():
+async def env(monkeypatch):
     engine = create_async_engine(
         "sqlite+aiosqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
     )
@@ -132,6 +133,8 @@ async def env():
         async with maker() as session:
             yield session
 
+    # The test database is one shared SQLite connection, which cannot run several sessions at once (PostgreSQL can).
+    monkeypatch.setattr(get_settings(), "scheduler_max_parallel_starts", 1)
     app = create_app()
     http = httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://cmp", headers=KEY
@@ -140,6 +143,7 @@ async def env():
     app.dependency_overrides[get_session] = session_override
     app.dependency_overrides[get_driver_factory] = lambda: e.factory
     app.dependency_overrides[get_now] = lambda: e.clock
+    app.dependency_overrides[get_maker] = lambda: maker
     yield e
     await http.aclose()
     await engine.dispose()

@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.crypto import get_cipher
 from app.core.database import get_sessionmaker
 from app.services.backup.jobs import sync_active_jobs
+from app.services.backup.scheduler import build_scheduler, redis_claim
 from app.services.context import default_driver_factory
 from app.services.telemetry.collector import housekeeping, poll_all
 
@@ -28,9 +29,38 @@ def poll_seconds(interval: int) -> set[int]:
 
 
 async def startup(ctx: dict[str, Any]) -> None:
-    ctx.setdefault("maker", get_sessionmaker())
-    ctx.setdefault("factory", default_driver_factory)
-    ctx.setdefault("cipher", get_cipher())
+    # setdefault would build the defaults even when the caller (a test) already supplied its own
+    if "maker" not in ctx:
+        ctx["maker"] = get_sessionmaker()
+    if "factory" not in ctx:
+        ctx["factory"] = default_driver_factory
+    if "cipher" not in ctx:
+        ctx["cipher"] = get_cipher()
+    settings = get_settings()
+    if not settings.scheduler_enabled:
+        log.info("The backup scheduler is switched off (CMP_SCHEDULER_ENABLED=false)")
+        return
+    # Several workers may run: the first one to claim a firing starts it (needs Redis, which ARQ provides).
+    redis = ctx.get("redis")
+    scheduler = build_scheduler(
+        ctx["maker"],
+        ctx["factory"],
+        timezone=settings.scheduler_timezone,
+        sync_seconds=settings.scheduler_sync_seconds,
+        misfire_grace_seconds=settings.scheduler_misfire_grace_seconds,
+        max_parallel_starts=settings.scheduler_max_parallel_starts,
+        claim=redis_claim(redis) if redis else None,
+    )
+    scheduler.start()
+    await scheduler.sync()  # load the policies now instead of after the first interval
+    ctx["scheduler"] = scheduler
+    log.info("Backup scheduler started (timezone %s)", settings.scheduler_timezone)
+
+
+async def shutdown(ctx: dict[str, Any]) -> None:
+    scheduler = ctx.pop("scheduler", None)
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
 
 
 async def collect_metrics(ctx: dict[str, Any]) -> dict[str, int]:
@@ -62,6 +92,7 @@ async def purge_old_data(ctx: dict[str, Any]) -> dict[str, int]:
 
 class WorkerSettings:
     on_startup = startup
+    on_shutdown = shutdown
     functions = [collect_metrics, sync_backup_jobs, purge_old_data]
     cron_jobs = [
         cron(

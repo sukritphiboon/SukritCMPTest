@@ -20,7 +20,9 @@ log. Missing or wrong key: `401`. There are no roles yet: every key may do every
 
 | Call | Notes |
 |---|---|
-| `POST/GET /backup-policies`, `GET/PATCH/DELETE /backup-policies/{id}` | cron, full/incremental, retention, WORM (`worm_enabled` needs an explicit `worm_mode`) |
+| `POST/GET /backup-policies`, `GET/PATCH/DELETE /backup-policies/{id}` | cron (checked when saved), full/incremental, retention, WORM (`worm_enabled` needs an explicit `worm_mode`); answers include `next_run_at` |
+| `GET /backup-policies/{id}/schedule?count=` | next run times in the system time zone |
+| `POST /backup-policies/{id}/run` | start the policy's backups now; result per asset |
 | `POST/GET /assets`, `GET/PATCH/DELETE /assets/{id}` | registered on the appliance as well; `PATCH {"policy_id": null}` removes the policy |
 | `POST /backup-jobs` | `202`, starts a backup |
 | `GET /backup-jobs`, `GET /backup-jobs/{id}?refresh=`, `GET /backup-jobs/summary` | list, follow, report |
