@@ -46,7 +46,9 @@ services:
 
   backend:
     build: ./backend
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +60,9 @@ services:
   worker:
     build: ./backend
     command: ["arq", "app.worker.settings.WorkerSettings"]
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy

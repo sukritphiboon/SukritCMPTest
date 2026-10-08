@@ -1,4 +1,3 @@
-
 async def admin(c, method, path, json=None):
     r = await c.http.request(method, f"/s3{path}", json=json, headers={"iBaseToken": c.token})
     return r.json()

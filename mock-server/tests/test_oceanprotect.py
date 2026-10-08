@@ -1,4 +1,4 @@
-from app.profiles import SECTORS_PER_GB
+from mock_server.profiles import SECTORS_PER_GB
 
 DAY = 86400
 
@@ -10,9 +10,9 @@ async def fs_id(c):
 
 async def test_seeded_backup_copies_have_retention_states(protect):
     copies = {c["NAME"]: c for c in await protect.ok("GET", "/backup_retention")}
-    assert copies["vm-prod-db-01"]["STATE"] == "locked"      # WORM, inside retention
-    assert copies["fileserver-nas"]["STATE"] == "retained"   # no WORM, inside retention
-    assert copies["vm-dev-test"]["STATE"] == "expired"       # 45 days old, 30 day retention
+    assert copies["vm-prod-db-01"]["STATE"] == "locked"  # WORM, inside retention
+    assert copies["fileserver-nas"]["STATE"] == "retained"  # no WORM, inside retention
+    assert copies["vm-dev-test"]["STATE"] == "expired"  # 45 days old, 30 day retention
 
 
 async def test_cannot_delete_locked_copy_but_can_delete_expired(protect):
@@ -55,7 +55,9 @@ async def test_worm_policy_enterprise_can_be_removed(protect):
 
 async def test_invalid_worm_parameters(protect):
     fid = await fs_id(protect)
-    body = await protect.call("POST", "/worm_policy", {"NAME": "p", "FSID": fid, "MODE": 9, "PROTECTPERIOD": 1})
+    body = await protect.call(
+        "POST", "/worm_policy", {"NAME": "p", "FSID": fid, "MODE": 9, "PROTECTPERIOD": 1}
+    )
     assert body["error"]["code"] == 50331651
 
 

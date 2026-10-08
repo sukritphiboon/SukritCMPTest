@@ -1,6 +1,6 @@
 """Huawei storage mock server entry point.
 
-Run: ``MOCK_PROFILE=dorado uvicorn app.main:app --port 8088``
+Run: ``MOCK_PROFILE=dorado uvicorn mock_server.main:app --port 8088``
 """
 
 from __future__ import annotations

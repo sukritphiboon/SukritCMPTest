@@ -1,4 +1,4 @@
-from app.profiles import SECTORS_PER_GB
+from mock_server.profiles import SECTORS_PER_GB
 
 GB10 = str(10 * SECTORS_PER_GB)
 
@@ -15,9 +15,7 @@ async def test_lun_lifecycle(dorado):
     listed = await dorado.ok("GET", "/lun")
     assert [x["ID"] for x in listed] == [lun["ID"]]
 
-    expanded = await dorado.ok(
-        "PUT", "/lun/expand", {"ID": lun["ID"], "CAPACITY": str(20 * SECTORS_PER_GB)}
-    )
+    expanded = await dorado.ok("PUT", "/lun/expand", {"ID": lun["ID"], "CAPACITY": str(20 * SECTORS_PER_GB)})
     assert expanded["CAPACITY"] == str(20 * SECTORS_PER_GB)
 
     await dorado.ok("DELETE", f"/lun/{lun['ID']}")
@@ -53,7 +51,9 @@ async def test_mapping_flow_exposes_lun_and_blocks_delete(dorado):
     lun = await make_lun(dorado)
     group = await dorado.ok("POST", "/lungroup", {"NAME": "lg1"})
     await dorado.ok(
-        "POST", "/lungroup/associate", {"ID": group["ID"], "ASSOCIATEOBJTYPE": 11, "ASSOCIATEOBJID": lun["ID"]}
+        "POST",
+        "/lungroup/associate",
+        {"ID": group["ID"], "ASSOCIATEOBJTYPE": 11, "ASSOCIATEOBJID": lun["ID"]},
     )
     host = await dorado.ok("POST", "/host", {"NAME": "esx01"})
     hg = await dorado.ok("POST", "/hostgroup", {"NAME": "hg1"})
@@ -64,7 +64,8 @@ async def test_mapping_flow_exposes_lun_and_blocks_delete(dorado):
     assert (await dorado.ok("GET", f"/lun/{lun['ID']}"))["EXPOSEDTOINITIATOR"] == "false"
     for obj_type, obj_id in ((256, group["ID"]), (14, hg["ID"])):
         await dorado.ok(
-            "PUT", "/mappingview/create_associate",
+            "PUT",
+            "/mappingview/create_associate",
             {"ID": view["ID"], "ASSOCIATEOBJTYPE": obj_type, "ASSOCIATEOBJID": obj_id},
         )
     assert (await dorado.ok("GET", f"/lun/{lun['ID']}"))["EXPOSEDTOINITIATOR"] == "true"

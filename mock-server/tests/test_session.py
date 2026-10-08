@@ -1,4 +1,4 @@
-from app.main import create_app  # noqa: F401
+from mock_server.main import create_app  # noqa: F401
 from tests.conftest import make_client
 
 

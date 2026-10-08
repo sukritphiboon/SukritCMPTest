@@ -1,4 +1,4 @@
-from app.profiles import SECTORS_PER_GB
+from mock_server.profiles import SECTORS_PER_GB
 from tests.conftest import make_client
 
 

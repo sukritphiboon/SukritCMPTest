@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.main import create_app
+from mock_server.main import create_app
 
 USER, PASSWORD = "admin", "Admin@storage1"
 BASE = "/deviceManager/rest"

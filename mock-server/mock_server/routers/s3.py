@@ -156,8 +156,12 @@ async def create_credentials(request: Request, body: dict[str, Any] = Body(...))
         "secret_key": secret_key,
     }
     return E.ok(
-        {"owner": body["owner"], "access_key": access_key, "secret_key": secret_key,
-         "endpoint": _endpoint(request)}
+        {
+            "owner": body["owner"],
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "endpoint": _endpoint(request),
+        }
     )
 
 
