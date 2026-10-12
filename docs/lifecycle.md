@@ -1,39 +1,39 @@
-# วงจรชีวิตของ OceanProtect ตามเอกสาร REST API
+# OceanProtect life cycle per the REST reference
 
-สรุปจากเอกสาร *OceanProtect Appliance V200R001C32 REST Interface Reference* ว่า API รองรับอะไรบ้าง
-และ CMP ทำไปถึงไหนแล้ว (ภาพทั้งหมดสร้างจาก `docs/diagrams/*.svg`)
+Summary of the *OceanProtect Appliance V200R001C32 REST Interface Reference*: what the API supports,
+and how much of it CMP covers today. The figures are generated from `docs/diagrams/*.svg`.
 
-## 1. ภาพรวม 6 ช่วง
+## 1. Six stages
 
-![ภาพรวมวงจรชีวิต](diagrams/01-lifecycle-overview.png)
+![Life-cycle overview](diagrams/01-lifecycle-overview.png)
 
-เตรียมระบบ → กำหนดการปกป้อง (SLA) → สำรอง → สำเนา → ใช้สำเนา → หมดอายุ/ลบ
-โดยมีชั้นความปลอดภัย (WORM, ransomware, air gap, DR drill) คร่อมอยู่ด้านล่าง
+Onboard, protect (SLA), back up, copy, use the copy, expire/delete. A security layer (WORM, ransomware
+detection, air gap, DR drill) spans stages 2 to 6.
 
-จุดสำคัญ: **ตารางเวลาอยู่ใน SLA ของเครื่อง** เครื่องรันเองตาม SLA
-ส่วนการสั่งสำรองด้วยมือเป็นทางเลือกเสริม
+Key point: **the schedule lives in the SLA on the appliance**. The appliance runs backups by itself;
+a manual backup call is an optional extra.
 
-## 2. สถานะของงาน (job)
+## 2. Job states
 
-![สถานะของ job](diagrams/02-job-states.png)
+![Job states](diagrams/02-job-states.png)
 
-เอกสารให้ค่าสถานะ 11 ค่า แต่ไม่ได้วาดลำดับการเปลี่ยนสถานะ ลูกศรเส้นประในภาพจึงเป็นการอนุมานของเรา
-ค่า `ABORT_FAILED` ยังไม่มีสถานะรองรับใน CMP
+The reference lists 11 job states but does not draw the transitions, so the dashed arrows are our inference.
+`ABORT_FAILED` has no CMP status yet.
 
-## 3. ชีวิตของสำเนา
+## 3. Life of a copy
 
-![ชีวิตของสำเนา](diagrams/03-copy-lifecycle.png)
+![Life of a copy](diagrams/03-copy-lifecycle.png)
 
-## 4. CMP ทำไปถึงไหน
+## 4. CMP coverage
 
-![CMP เทียบวงจรชีวิต](diagrams/04-cmp-coverage.png)
+![CMP coverage](diagrams/04-cmp-coverage.png)
 
-สีเขียวคือใช้ต่อได้ทันที สีเหลืองคือมีแล้วแต่ต้องเขียน driver ใหม่ให้ตรง API จริง สีเทาคือยังไม่มี
-ขั้นต่อไปที่ตกลงกันไว้คือสร้าง mock และ driver ใหม่บน API จริง (`/v1`, `X-Auth-Token`)
+Green: reusable as is. Amber: exists but needs a new driver for the real API. Grey: not built.
+The agreed next step is a new mock and driver on the real API (`/v1`, `X-Auth-Token`).
 
-## สิ่งที่ยังไม่ยืนยัน
+## Not confirmed
 
-- อ่านถึงระดับรายชื่อ interface ของ replication, archive, live mount, ransomware, air gap, DR drill
-- ลำดับการเปลี่ยนสถานะของ job และ copy เป็นการอนุมาน
-- ไม่พบค่า enum สถานะของ copy และค่า `generated_by` ในส่วนที่อ่าน
-- การหยุดงานใช้ `PUT /v1/jobs/{jobId}/action/stop` (ไม่ใช่ POST)
+- Replication, archive, live mount, ransomware, air gap and DR drill were read only down to interface names.
+- Job and copy transitions are inferred.
+- The copy status enum and `generated_by` values were not found in the parts read.
+- Stopping a job is `PUT /v1/jobs/{jobId}/action/stop` (not POST).
