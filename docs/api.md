@@ -8,7 +8,7 @@ The analytics endpoints are described in `telemetry.md`, backups in `backup-orch
 Send `X-API-Key: <key>`. Keys come from `CMP_API_KEYS`, written as `"user:role:key,user2:role2:key2"`; the user name is
 written as `actor` in the audit log. Missing or wrong key: `401`. A key whose role is too low: `403`.
 
-Roles (each includes the ones below it):
+Roles (each includes the ones below it; diagram: `docs/diagrams/05-rbac.png`):
 
 | Role | May do |
 |---|---|
