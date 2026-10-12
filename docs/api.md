@@ -5,8 +5,21 @@ The analytics endpoints are described in `telemetry.md`, backups in `backup-orch
 
 ## Authentication
 
-Send `X-API-Key: <key>`. Keys come from `CMP_API_KEYS` (`"alice:key1,bob:key2"`); the user name is written as `actor` in the audit
-log. Missing or wrong key: `401`. There are no roles yet: every key may do everything.
+Send `X-API-Key: <key>`. Keys come from `CMP_API_KEYS`, written as `"user:role:key,user2:role2:key2"`; the user name is
+written as `actor` in the audit log. Missing or wrong key: `401`. A key whose role is too low: `403`.
+
+Roles (each includes the ones below it):
+
+| Role | May do |
+|---|---|
+| `viewer` | every `GET` except the audit log |
+| `operator` | plus: start and cancel a backup job, run a policy now, acknowledge an alarm, test a target connection |
+| `admin` | everything else: create/change/delete targets, policies and assets, and read `/audit-logs` |
+
+The old `user:key` form (no role) still works and means `admin`, so existing deployments keep their access.
+Any write that is not on the operator list needs `admin`, so a new endpoint is admin-only until it is added to
+`OPERATOR_ACTIONS` in `app/core/security.py`. Not done yet: per-target access, password login, and recording
+refused (403) calls in the audit log.
 
 ## Targets (appliances)
 

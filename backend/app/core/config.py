@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     scheduler_sync_seconds: int = 30  # how soon a changed policy is picked up
     scheduler_misfire_grace_seconds: int = 300  # a run that starts later than this after its time is skipped
     scheduler_max_parallel_starts: int = 4  # backups started at the same moment by one policy run
-    # "user:key,user2:key2" - the user name is recorded as the actor in the audit log
+    # "user:role:key,user2:key2" (role = viewer | operator | admin; no role means admin). The user name
+    # is recorded as the actor in the audit log
     api_keys: str = ""
     # how the CMP reaches the arrays (mock servers speak plain http)
     device_https: bool = True

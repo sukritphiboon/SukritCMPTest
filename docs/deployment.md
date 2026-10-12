@@ -3,7 +3,7 @@
 ```bash
 cp .env.example .env
 python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"   # CMP_ENCRYPTION_KEY
-# set CMP_API_KEYS="admin:<long random key>"
+# set CMP_API_KEYS="admin:admin:<long random key>"
 docker compose up --build
 ```
 
